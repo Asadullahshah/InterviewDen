@@ -1,99 +1,100 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
-type ScreeningStep = "resume" | "quiz" | "technical" | "video";
+export type ScreeningStep = "resume" | "quiz" | "technical" | "video";
 
-interface ScreeningProgress {
+export interface ScreeningProgress {
   jobId: string;
   currentStep: ScreeningStep;
   progress: {
-    resume?: {
+    resume: {
       answers: string[];
       timeLeft: number;
-      isCompleted: boolean;
+      completed: boolean;
     };
-    quiz?: {
-      answers: { [key: number]: number };
+    quiz: {
+      answers: string[];
       timeLeft: number;
-      isCompleted: boolean;
+      completed: boolean;
     };
-    technical?: {
-      answers: { [key: number]: number };
+    technical: {
+      currentProblem: number;
+      code: string;
       timeLeft: number;
-      isCompleted: boolean;
+      testResults: any[];
+      completed: boolean;
     };
-    video?: {
-      recordedAnswers: { [key: number]: boolean };
+    video: {
+      recordings: any[];
       timeLeft: number;
-      isCompleted: boolean;
+      completed: boolean;
     };
   };
-  lastUpdated: string;
+  lastUpdated: number;
 }
 
 interface ScreeningContextType {
-  screeningProgress: ScreeningProgress[];
-  updateProgress: (jobId: string, step: ScreeningStep, progress: any) => void;
+  progress: Record<string, ScreeningProgress>;
+  updateProgress: (jobId: string, step: ScreeningStep, data: Partial<ScreeningProgress["progress"][ScreeningStep]>) => void;
   getProgress: (jobId: string) => ScreeningProgress | undefined;
-  startScreening: (jobId: string) => void;
 }
 
 const ScreeningContext = createContext<ScreeningContextType | undefined>(undefined);
 
-export function ScreeningProvider({ children }: { children: React.ReactNode }) {
-  const [screeningProgress, setScreeningProgress] = useState<ScreeningProgress[]>(() => {
+export function ScreeningProvider({ children }: { children: ReactNode }) {
+  const [progress, setProgress] = useState<Record<string, ScreeningProgress>>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("screeningProgress");
-      return saved ? JSON.parse(saved) : [];
+      return saved ? JSON.parse(saved) : {};
     }
-    return [];
+    return {};
   });
 
   useEffect(() => {
-    localStorage.setItem("screeningProgress", JSON.stringify(screeningProgress));
-  }, [screeningProgress]);
+    localStorage.setItem("screeningProgress", JSON.stringify(progress));
+  }, [progress]);
 
-  const updateProgress = (jobId: string, step: ScreeningStep, progress: any) => {
-    setScreeningProgress(prev => {
-      const existing = prev.find(p => p.jobId === jobId);
-      if (existing) {
-        return prev.map(p => 
-          p.jobId === jobId 
-            ? { 
-                ...p, 
-                currentStep: step,
-                progress: { ...p.progress, [step]: progress },
-                lastUpdated: new Date().toISOString()
-              }
-            : p
-        );
-      }
-      return [...prev, {
+  const updateProgress = (
+    jobId: string,
+    step: ScreeningStep,
+    data: Partial<ScreeningProgress["progress"][ScreeningStep]>
+  ) => {
+    setProgress((prev) => {
+      const current = prev[jobId] || {
         jobId,
         currentStep: step,
-        progress: { [step]: progress },
-        lastUpdated: new Date().toISOString()
-      }];
+        progress: {
+          resume: { answers: [], timeLeft: 30 * 60, completed: false },
+          quiz: { answers: [], timeLeft: 20 * 60, completed: false },
+          technical: { currentProblem: 0, code: "", timeLeft: 30 * 60, testResults: [], completed: false },
+          video: { recordings: [], timeLeft: 10 * 60, completed: false },
+        },
+        lastUpdated: Date.now(),
+      };
+
+      return {
+        ...prev,
+        [jobId]: {
+          ...current,
+          currentStep: step,
+          progress: {
+            ...current.progress,
+            [step]: {
+              ...current.progress[step],
+              ...data,
+            },
+          },
+          lastUpdated: Date.now(),
+        },
+      };
     });
   };
 
-  const getProgress = (jobId: string) => {
-    return screeningProgress.find(p => p.jobId === jobId);
-  };
-
-  const startScreening = (jobId: string) => {
-    if (!getProgress(jobId)) {
-      updateProgress(jobId, "resume", {
-        answers: [],
-        timeLeft: 30 * 60, // 30 minutes
-        isCompleted: false
-      });
-    }
-  };
+  const getProgress = (jobId: string) => progress[jobId];
 
   return (
-    <ScreeningContext.Provider value={{ screeningProgress, updateProgress, getProgress, startScreening }}>
+    <ScreeningContext.Provider value={{ progress, updateProgress, getProgress }}>
       {children}
     </ScreeningContext.Provider>
   );

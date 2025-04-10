@@ -3,18 +3,7 @@
 import { ReactNode } from "react";
 import { Sidebar } from "@/components/ui/app-sidebar";
 import { Header } from "@/components/header";
-import { Home, FileText, Calendar, MessageSquare, HelpCircle, Settings, Search, Briefcase } from "lucide-react";
-
-const sidebarItems = [
-  { title: "Dashboard", href: "/candidate/dashboard", icon: "Home" },
-  { title: "Find Jobs", href: "/candidate/jobs", icon: "Search" },
-  { title: "Applied Jobs", href: "/candidate/applications", icon: "Briefcase" },
-  { title: "My CV", href: "/candidate/cv", icon: "FileText" },
-  { title: "Interviews", href: "/candidate/interviews", icon: "Calendar" },
-  { title: "Feedback", href: "/candidate/feedback", icon: "MessageSquare" },
-  { title: "Help Center", href: "/candidate/help", icon: "HelpCircle" },
-  { title: "Settings", href: "/candidate/settings", icon: "Settings" },
-];
+import { Home, FileText, Calendar, MessageSquare, HelpCircle, Settings, Search, Briefcase, Video, User, LayoutDashboard, ClipboardList } from "lucide-react";
 
 const iconMap = {
   Home,
@@ -25,20 +14,64 @@ const iconMap = {
   MessageSquare,
   HelpCircle,
   Settings,
+  Video,
+  User,
+  LayoutDashboard,
+  ClipboardList,
 };
 
 export default function CandidateLayout({ children }: { children: ReactNode }) {
+  const sidebarItems = [
+    {
+      title: "Dashboard",
+      href: "/candidate",
+      icon: "LayoutDashboard",
+    },
+    {
+      title: "My Resume",
+      href: "/candidate/cv",
+      icon: "FileText",
+    },
+    {
+      title: "Find Jobs",
+      href: "/candidate/jobs",
+      icon: "Search",
+    },
+    {
+      title: "Interviews",
+      href: "/candidate/tests",
+      icon: "Calendar",
+    },
+    {
+      title: "Feedback",
+      href: "/candidate/feedback",
+      icon: "MessageSquare",
+    },
+    {
+      title: "Settings",
+      href: "/candidate/settings",
+      icon: "Settings",
+    },
+    {
+      title: "Profile",
+      href: "/candidate/profile",
+      icon: "User",
+    }
+  ];
+
   return (
-    <div className="flex h-screen">
-      <Sidebar 
-        items={sidebarItems} 
-        userType="candidate" 
+    <div className="flex min-h-screen">
+      <Sidebar
+        items={sidebarItems}
+        userType="candidate"
+        aiAssistantTitle="Interview Coach"
         iconMap={iconMap}
       />
-      <div className="flex-1 flex flex-col ml-64">
-        <Header userType="candidate" />
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
-      </div>
+      <main className="flex-1 overflow-y-auto ml-64">
+        <div className="container mx-auto py-6">
+          {children}
+        </div>
+      </main>
     </div>
   );
 }

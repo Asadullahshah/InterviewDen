@@ -6,7 +6,9 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { CheckCircle2, Circle } from "lucide-react";
 
-const steps = [
+type ScreeningStep = "resume" | "quiz" | "technical" | "video";
+
+const steps: { id: ScreeningStep; label: string }[] = [
   { id: "resume", label: "Resume Screening" },
   { id: "quiz", label: "Quiz" },
   { id: "technical", label: "Technical Assessment" },
@@ -19,12 +21,23 @@ export default function ScreeningLayout({
   children: React.ReactNode;
 }) {
   const searchParams = useSearchParams();
-  const jobId = searchParams.get("jobId");
-  const { screeningProgress } = useScreening();
+  const jobId = searchParams?.get("jobId");
+  const { getProgress } = useScreening();
   
-  const progress = screeningProgress.find(p => p.jobId === jobId);
+  if (!jobId) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Card className="p-6">
+          <h2 className="text-xl font-semibold">Error</h2>
+          <p className="text-muted-foreground">No job ID provided. Please return to the jobs page and try again.</p>
+        </Card>
+      </div>
+    );
+  }
+
+  const progress = getProgress(jobId);
   const currentStepIndex = progress ? steps.findIndex(step => step.id === progress.currentStep) : 0;
-  const completedSteps = progress ? Object.entries(progress.progress).filter(([_, value]) => value?.isCompleted).length : 0;
+  const completedSteps = progress ? Object.entries(progress.progress).filter(([_, value]) => value?.completed).length : 0;
   const totalSteps = steps.length;
   const progressPercentage = (completedSteps / totalSteps) * 100;
 
@@ -52,7 +65,7 @@ export default function ScreeningLayout({
           
           <div className="grid grid-cols-4 gap-4">
             {steps.map((step, index) => {
-              const isCompleted = progress?.progress[step.id]?.isCompleted;
+              const isCompleted = progress?.progress[step.id]?.completed;
               const isCurrent = index === currentStepIndex;
               const isPast = index < currentStepIndex;
               

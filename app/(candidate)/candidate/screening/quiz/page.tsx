@@ -43,12 +43,18 @@ export default function QuizPage() {
   const searchParams = useSearchParams();
   const jobId = searchParams.get("jobId");
   const router = useRouter();
-  const { screeningProgress, updateProgress } = useScreening();
+  const { progress: screeningProgress, updateProgress } = useScreening();
   
-  const progress = screeningProgress.find(p => p.jobId === jobId)?.progress.quiz;
-  const [answers, setAnswers] = useState<{ [key: number]: number }>(progress?.answers || {});
-  const [timeLeft, setTimeLeft] = useState(progress?.timeLeft || 15 * 60); // 15 minutes
-  const [isRunning, setIsRunning] = useState(!progress?.isCompleted);
+  if (!jobId) {
+    router.push("/candidate/jobs");
+    return null;
+  }
+
+  const jobProgress = screeningProgress[jobId];
+  const quizProgress = jobProgress?.progress.quiz;
+  const [answers, setAnswers] = useState<string[]>(quizProgress?.answers || []);
+  const [timeLeft, setTimeLeft] = useState(quizProgress?.timeLeft || 15 * 60); // 15 minutes
+  const [isRunning, setIsRunning] = useState(!quizProgress?.completed);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
 
@@ -71,10 +77,9 @@ export default function QuizPage() {
   };
 
   const handleAnswerChange = (value: number) => {
-    setAnswers(prev => ({
-      ...prev,
-      [questions[currentQuestion].id]: value
-    }));
+    const newAnswers = [...answers];
+    newAnswers[currentQuestion] = value.toString();
+    setAnswers(newAnswers);
   };
 
   const handleNextQuestion = () => {
@@ -94,7 +99,7 @@ export default function QuizPage() {
       updateProgress(jobId, "quiz", {
         answers,
         timeLeft,
-        isCompleted: true
+        completed: true
       });
       setIsRunning(false);
       router.push(`/candidate/screening/technical?jobId=${jobId}`);
@@ -106,7 +111,7 @@ export default function QuizPage() {
       updateProgress(jobId, "quiz", {
         answers,
         timeLeft,
-        isCompleted: false
+        completed: false
       });
       setShowConfirmation(true);
     }
@@ -165,7 +170,7 @@ export default function QuizPage() {
                 <p className="text-lg">{questions[currentQuestion].question}</p>
                 <div className="pt-4">
                   <Slider
-                    value={[answers[questions[currentQuestion].id] || 0]}
+                    value={[Number(answers[currentQuestion] || 0)]}
                     onValueChange={([value]) => handleAnswerChange(value)}
                     min={0}
                     max={4}
@@ -206,7 +211,7 @@ export default function QuizPage() {
             Stop Test
           </Button>
           <div className="flex items-center gap-2">
-            {Object.keys(answers).length} of {questions.length} questions answered
+            {answers.length} of {questions.length} questions answered
           </div>
         </CardFooter>
       </Card>

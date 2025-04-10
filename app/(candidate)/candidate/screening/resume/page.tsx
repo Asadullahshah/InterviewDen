@@ -29,9 +29,9 @@ const uploadedResumes = [
 
 export default function ResumeScreeningPage() {
   const searchParams = useSearchParams();
-  const jobId = searchParams.get("jobId");
+  const jobId = searchParams?.get("jobId");
   const router = useRouter();
-  const { screeningProgress, updateProgress } = useScreening();
+  const { getProgress, updateProgress } = useScreening();
   
   const [selectedResume, setSelectedResume] = useState<string | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -41,22 +41,44 @@ export default function ResumeScreeningPage() {
   };
 
   const handleSubmit = () => {
-    if (jobId && selectedResume) {
-      updateProgress(jobId, "resume", {
-        selectedResumeId: selectedResume,
-        isCompleted: true
-      });
-      router.push(`/candidate/screening/quiz?jobId=${jobId}`);
+    if (!jobId) {
+      console.error('No jobId provided');
+      return;
+    }
+
+    if (selectedResume) {
+      try {
+        console.log('Updating progress for job:', jobId);
+        updateProgress(jobId, "resume", {
+          answers: [selectedResume],
+          timeLeft: 30 * 60,
+          completed: true
+        });
+        console.log('Navigating to quiz');
+        router.push(`/candidate/screening/quiz?jobId=${jobId}`);
+      } catch (err) {
+        console.error('Error in handleSubmit:', err);
+      }
     }
   };
 
   const handleStopTest = () => {
-    if (jobId) {
-      updateProgress(jobId, "resume", {
-        selectedResumeId: selectedResume,
-        isCompleted: false
-      });
-      setShowConfirmation(true);
+    if (!jobId) {
+      console.error('No jobId provided');
+      return;
+    }
+
+    if (selectedResume) {
+      try {
+        updateProgress(jobId, "resume", {
+          answers: [selectedResume],
+          timeLeft: 30 * 60,
+          completed: false
+        });
+        setShowConfirmation(true);
+      } catch (err) {
+        console.error('Error in handleStopTest:', err);
+      }
     }
   };
 

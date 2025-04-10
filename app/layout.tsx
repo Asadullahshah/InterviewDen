@@ -1,4 +1,3 @@
-import type React from "react";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
@@ -29,13 +28,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.className} suppressHydrationWarning>
-      <body>
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className} suppressHydrationWarning>
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
           enableSystem={false}
           disableTransitionOnChange
+          storageKey="interviewden-theme"
         >
           <ScreeningProvider>
             {children}
@@ -45,41 +45,3 @@ export default function RootLayout({
     </html>
   );
 }
-
-const sidebarItems = [
-  {
-    title: "Dashboard",
-    href: "/company/dashboard",
-    icon: Home, // Pass the component reference
-  },
-  {
-    title: "Candidates",
-    href: "/company/candidates",
-    icon: Users,
-  },
-  {
-    title: "Jobs",
-    href: "/company/jobs",
-    icon: Briefcase,
-  },
-  {
-    title: "Tests",
-    href: "/company/tests",
-    icon: ClipboardCheck,
-  },
-  {
-    title: "Analytics",
-    href: "/company/analytics",
-    icon: BarChart2,
-  },
-  {
-    title: "Help Center",
-    href: "/company/help",
-    icon: HelpCircle,
-  },
-  {
-    title: "Settings",
-    href: "/company/settings",
-    icon: Settings,
-  },
-];
