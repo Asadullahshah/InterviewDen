@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Search, MapPin, Briefcase, Clock, Building2, CheckCircle2, AlertCircle, PlayCircle, DollarSign, GraduationCap } from "lucide-react";
+import { Search, MapPin, Briefcase, Clock, Building2, CheckCircle2, AlertCircle, PlayCircle, DollarSign, GraduationCap, FileText } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useScreening, ScreeningProgress } from "@/app/context/screening-context";
@@ -262,20 +262,17 @@ export default function JobsPage() {
                   {job.description}
                 </p>
               </CardContent>
-              <CardFooter className="flex flex-col gap-2">
+              <CardFooter className="flex justify-between">
+                <Button variant="outline" onClick={() => router.push(`/candidate/jobs/${job.id}`)}>
+                  View Job
+                </Button>
                 {job.screeningProgress ? (
-                  <div className="w-full space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span>Progress</span>
-                      <span className="font-medium">{getScreeningStatus(job.screeningProgress).percentage}%</span>
-                    </div>
-                    <Progress value={getScreeningStatus(job.screeningProgress).percentage} />
-                    <Button className="w-full" onClick={() => handleResumeScreening(job.id)}>
-                      Resume Screening
-                    </Button>
-                  </div>
+                  <Button onClick={() => handleResumeScreening(job.id)}>
+                    <FileText className="w-4 h-4 mr-2" />
+                    Resume Screening
+                  </Button>
                 ) : (
-                  <Button className="w-full" onClick={() => handleApply(job.id)}>
+                  <Button onClick={() => handleApply(job.id)}>
                     Apply Now
                   </Button>
                 )}

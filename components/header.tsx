@@ -77,7 +77,11 @@ export function Header({ userType }: HeaderProps) {
 
           <Button variant="outline" size="icon" asChild>
             <Link href={`/${userType}/profile`}>
-              <User className="h-5 w-5" />
+              <img
+                src="/placeholder-user.jpg"
+                alt="Profile"
+                className="h-8 w-8 rounded-full object-cover"
+              />
               <span className="sr-only">Profile</span>
             </Link>
           </Button>

@@ -19,6 +19,7 @@ interface SidebarProps {
   isCollapsed?: boolean;
   setIsCollapsed?: (collapsed: boolean) => void;
   className?: string;
+  children?: React.ReactNode;
 }
 
 export function Sidebar({
@@ -29,6 +30,7 @@ export function Sidebar({
   iconMap,
   isCollapsed = false,
   setIsCollapsed,
+  children,
   ...props
 }: SidebarProps) {
   const pathname = usePathname()
@@ -79,6 +81,7 @@ export function Sidebar({
         </nav>
       </div>
       <div className="p-4 mt-auto">
+        {children}
         <div className={cn("rounded-lg p-4 text-white", aiBoxBgColor)}>
           <h3 className="font-medium flex items-center gap-2 mb-2">
             <svg

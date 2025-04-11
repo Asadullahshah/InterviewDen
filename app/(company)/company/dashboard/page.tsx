@@ -1,13 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronRight, Filter, Briefcase, Plus, Lightbulb, TrendingUp, CheckCircle2 } from "lucide-react"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { ChevronRight, Filter, Briefcase, Plus, Lightbulb, TrendingUp, CheckCircle2, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import Link from "next/link"
 
 export default function CompanyDashboard() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -21,13 +21,17 @@ export default function CompanyDashboard() {
           <p className="text-slate-500 dark:text-slate-400">Here's what's happening with your recruitment today.</p>
         </div>
         <div className="flex gap-2">
-          <Button className="bg-violet-600 hover:bg-violet-700">
-            <Plus className="mr-2 h-4 w-4" />
-            Post New Job
-          </Button>
-          <Button variant="outline" className="border-slate-200 text-slate-700 hover:bg-slate-100">
-            View Analytics
-          </Button>
+          <Link href="/company/jobs/create">
+            <Button className="bg-violet-600 hover:bg-violet-700">
+              <Plus className="mr-2 h-4 w-4" />
+              Post New Job
+            </Button>
+          </Link>
+          <Link href="/company/analytics">
+            <Button variant="outline" className="border-slate-200 text-slate-700 hover:bg-slate-100">
+              View Analytics
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -126,15 +130,12 @@ export default function CompanyDashboard() {
                 {/* Candidate Item */}
                 <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
                   <div className="flex items-center gap-4">
-                    <Avatar className="h-10 w-10 border-2 border-emerald-200">
-                      <AvatarImage src="/placeholder.svg?height=40&width=40" alt="Candidate" />
-                      <AvatarFallback className="bg-emerald-100 text-emerald-700">JS</AvatarFallback>
-                    </Avatar>
+                    <div className="h-10 w-10 rounded-md bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center">
+                      <Briefcase className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                    </div>
                     <div>
-                      <h3 className="font-medium text-slate-900 dark:text-white">John Smith</h3>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">
-                        Senior Frontend Developer • 5 years exp.
-                      </p>
+                      <h3 className="font-medium text-slate-900 dark:text-white">Senior Frontend Developer</h3>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">Remote • Posted 5 days ago</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
@@ -150,13 +151,12 @@ export default function CompanyDashboard() {
                 {/* Candidate Item */}
                 <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
                   <div className="flex items-center gap-4">
-                    <Avatar className="h-10 w-10 border-2 border-emerald-200">
-                      <AvatarImage src="/placeholder.svg?height=40&width=40" alt="Candidate" />
-                      <AvatarFallback className="bg-emerald-100 text-emerald-700">AJ</AvatarFallback>
-                    </Avatar>
+                    <div className="h-10 w-10 rounded-md bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center">
+                      <Briefcase className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                    </div>
                     <div>
-                      <h3 className="font-medium text-slate-900 dark:text-white">Alice Johnson</h3>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">Full Stack Developer • 3 years exp.</p>
+                      <h3 className="font-medium text-slate-900 dark:text-white">Full Stack Developer</h3>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">Hybrid • Posted 2 weeks ago</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
@@ -172,13 +172,12 @@ export default function CompanyDashboard() {
                 {/* Candidate Item */}
                 <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
                   <div className="flex items-center gap-4">
-                    <Avatar className="h-10 w-10 border-2 border-emerald-200">
-                      <AvatarImage src="/placeholder.svg?height=40&width=40" alt="Candidate" />
-                      <AvatarFallback className="bg-emerald-100 text-emerald-700">RP</AvatarFallback>
-                    </Avatar>
+                    <div className="h-10 w-10 rounded-md bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center">
+                      <Briefcase className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                    </div>
                     <div>
-                      <h3 className="font-medium text-slate-900 dark:text-white">Robert Parker</h3>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">Backend Developer • 4 years exp.</p>
+                      <h3 className="font-medium text-slate-900 dark:text-white">UX/UI Designer</h3>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">On-site • Posted 3 days ago</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
@@ -287,10 +286,9 @@ export default function CompanyDashboard() {
                 {/* Interview Item */}
                 <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
                   <div className="flex items-center gap-4">
-                    <Avatar className="h-10 w-10 border-2 border-rose-200">
-                      <AvatarImage src="/placeholder.svg?height=40&width=40" alt="Candidate" />
-                      <AvatarFallback className="bg-rose-100 text-rose-700">JS</AvatarFallback>
-                    </Avatar>
+                    <div className="h-10 w-10 rounded-md bg-rose-100">
+                      <Briefcase className="h-5 w-5 text-rose-700" />
+                    </div>
                     <div>
                       <h3 className="font-medium text-slate-900 dark:text-white">John Smith</h3>
                       <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -318,10 +316,9 @@ export default function CompanyDashboard() {
                 {/* Interview Item */}
                 <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
                   <div className="flex items-center gap-4">
-                    <Avatar className="h-10 w-10 border-2 border-rose-200">
-                      <AvatarImage src="/placeholder.svg?height=40&width=40" alt="Candidate" />
-                      <AvatarFallback className="bg-rose-100 text-rose-700">AJ</AvatarFallback>
-                    </Avatar>
+                    <div className="h-10 w-10 rounded-md bg-rose-100">
+                      <Briefcase className="h-5 w-5 text-rose-700" />
+                    </div>
                     <div>
                       <h3 className="font-medium text-slate-900 dark:text-white">Alice Johnson</h3>
                       <p className="text-sm text-slate-500 dark:text-slate-400">AI Assessment • Friday, 2:00 PM</p>
@@ -347,10 +344,9 @@ export default function CompanyDashboard() {
                 {/* Interview Item */}
                 <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
                   <div className="flex items-center gap-4">
-                    <Avatar className="h-10 w-10 border-2 border-rose-200">
-                      <AvatarImage src="/placeholder.svg?height=40&width=40" alt="Candidate" />
-                      <AvatarFallback className="bg-rose-100 text-rose-700">RP</AvatarFallback>
-                    </Avatar>
+                    <div className="h-10 w-10 rounded-md bg-rose-100">
+                      <Briefcase className="h-5 w-5 text-rose-700" />
+                    </div>
                     <div>
                       <h3 className="font-medium text-slate-900 dark:text-white">Robert Parker</h3>
                       <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -385,45 +381,82 @@ export default function CompanyDashboard() {
         </TabsContent>
       </Tabs>
 
-      {/* AI Insights Card */}
+      {/* Recruitment Analytics Card */}
       <Card className="border-slate-200 shadow-sm overflow-hidden">
         <div className="bg-gradient-to-r from-violet-600 to-indigo-600 h-2"></div>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Lightbulb className="h-5 w-5 text-amber-500" /> AI Recruitment Insights
+            <TrendingUp className="h-5 w-5 text-violet-500" /> Recruitment Analytics
           </CardTitle>
-          <CardDescription>AI-powered analytics to optimize your hiring process</CardDescription>
+          <CardDescription>Key metrics and insights for your hiring process</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div className="p-4 border rounded-lg bg-blue-50 dark:bg-blue-950 border-blue-100 dark:border-blue-900">
-              <h3 className="font-medium mb-2 text-blue-900 dark:text-blue-300 flex items-center gap-2">
-                <TrendingUp className="h-4 w-4" /> Candidate Quality Insights
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 border rounded-lg bg-slate-50 dark:bg-slate-800">
+              <h3 className="font-medium mb-2 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Time-to-Hire Metrics
               </h3>
-              <p className="text-sm text-blue-700 dark:text-blue-400 mb-3">
-                Your Senior Frontend Developer position is attracting high-quality candidates. 85% of applicants match
-                your required skills, compared to the industry average of 65%.
-              </p>
-              <Button variant="outline" size="sm" className="bg-white text-blue-700 border-blue-200 hover:bg-blue-50">
-                View Details
-              </Button>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-slate-600 dark:text-slate-400">Average Time to Hire</span>
+                  <span className="font-medium">18 days</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-slate-600 dark:text-slate-400">Industry Average</span>
+                  <span className="font-medium text-emerald-600">25 days</span>
+                </div>
+                <div className="h-2 bg-slate-200 rounded-full mt-2">
+                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: '72%' }}></div>
+                </div>
+              </div>
             </div>
-
-            <div className="p-4 border rounded-lg bg-amber-50 dark:bg-amber-950 border-amber-100 dark:border-amber-900">
-              <h3 className="font-medium mb-2 text-amber-900 dark:text-amber-300 flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4" /> Hiring Process Optimization
+            <div className="p-4 border rounded-lg bg-slate-50 dark:bg-slate-800">
+              <h3 className="font-medium mb-2 flex items-center gap-2">
+                <Filter className="h-4 w-4 text-violet-500" /> Candidate Pipeline
               </h3>
-              <p className="text-sm text-amber-700 dark:text-amber-400 mb-3">
-                Your average time-to-hire is 18 days, which is 30% faster than industry average. Consider adding an AI
-                technical assessment to further reduce screening time.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-white text-amber-700 border-amber-200 hover:bg-amber-50"
-              >
-                Implement Suggestion
-              </Button>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-slate-600 dark:text-slate-400">Application to Interview</span>
+                  <span className="font-medium">32%</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-slate-600 dark:text-slate-400">Interview to Offer</span>
+                  <span className="font-medium">28%</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-slate-600 dark:text-slate-400">Offer Acceptance</span>
+                  <span className="font-medium text-violet-600">85%</span>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 border rounded-lg bg-slate-50 dark:bg-slate-800">
+              <h3 className="font-medium mb-2 flex items-center gap-2">
+                <Briefcase className="h-4 w-4 text-blue-500" /> Top Performing Jobs
+              </h3>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-slate-600 dark:text-slate-400">Frontend Developer</span>
+                  <Badge className="bg-blue-100 text-blue-700">48 applicants</Badge>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-slate-600 dark:text-slate-400">DevOps Engineer</span>
+                  <Badge className="bg-blue-100 text-blue-700">36 applicants</Badge>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 border rounded-lg bg-slate-50 dark:bg-slate-800">
+              <h3 className="font-medium mb-2 flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-rose-500" /> Areas for Improvement
+              </h3>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-slate-600 dark:text-slate-400">• Technical screening time can be reduced</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-slate-600 dark:text-slate-400">• Interview scheduling efficiency: 65%</span>
+                </div>
+                <Button variant="outline" size="sm" className="w-full mt-2">View Recommendations</Button>
+              </div>
             </div>
           </div>
         </CardContent>
