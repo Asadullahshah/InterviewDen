@@ -2,9 +2,8 @@
 
 import { ReactNode } from "react";
 import { Sidebar } from "@/components/ui/app-sidebar";
+import { Header } from "@/components/header";
 import { Home, Users, Briefcase, Calendar, FileText, BarChart, HelpCircle, Settings, User, LogOut } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import Link from "next/link";
 
 const iconMap = {
   Home,
@@ -55,6 +54,17 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
       title: "Profile",
       href: "/company/profile",
       icon: "User",
+    },
+    {
+      title: "Help Center",
+      href: "/company/help",
+      icon: "HelpCircle",
+    },
+    {
+      title: "Logout",
+      href: "/login",
+      icon: "LogOut",
+      className: "text-red-500 hover:text-red-600",
     }
   ];
 
@@ -65,28 +75,15 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
         userType="company"
         aiAssistantTitle="Recruitment Assistant"
         iconMap={iconMap}
-      >
-        <div className="flex-1" />
-        <div className="flex flex-col gap-2">
-          <Button variant="ghost" className="w-full justify-start gap-2 text-violet-100 hover:text-white hover:bg-violet-700" asChild>
-            <Link href="/company/help">
-              <HelpCircle className="h-4 w-4" />
-              Help Center
-            </Link>
-          </Button>
-          <Button variant="ghost" className="w-full justify-start gap-2 text-red-500 hover:text-red-600 hover:bg-red-50" asChild>
-            <Link href="/login">
-              <LogOut className="h-4 w-4" />
-              Logout
-            </Link>
-          </Button>
-        </div>
-      </Sidebar>
-      <main className="flex-1 overflow-y-auto ml-64">
-        <div className="container mx-auto py-6">
-          {children}
-        </div>
-      </main>
+      />
+      <div className="flex-1">
+        <Header userType="company" />
+        <main className="overflow-y-auto ml-64">
+          <div className="container mx-auto py-6">
+            {children}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

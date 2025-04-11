@@ -3,75 +3,74 @@
 import { ReactNode } from "react";
 import { Sidebar } from "@/components/ui/app-sidebar";
 import { Header } from "@/components/header";
-import { Home, FileText, Calendar, MessageSquare, HelpCircle, Settings, Search, Briefcase, Video, User, LayoutDashboard, ClipboardList } from "lucide-react";
+import { Home, Briefcase, FileText, Calendar, User, HelpCircle, LogOut } from "lucide-react";
 
 const iconMap = {
   Home,
-  Search,
   Briefcase,
   FileText,
   Calendar,
-  MessageSquare,
-  HelpCircle,
-  Settings,
-  Video,
   User,
-  LayoutDashboard,
-  ClipboardList,
+  HelpCircle,
+  LogOut,
 };
 
 export default function CandidateLayout({ children }: { children: ReactNode }) {
   const sidebarItems = [
     {
       title: "Dashboard",
-      href: "/candidate",
-      icon: "LayoutDashboard",
+      href: "/candidate/dashboard",
+      icon: "Home",
     },
     {
-      title: "My Resume",
-      href: "/candidate/cv",
+      title: "Jobs",
+      href: "/candidate/jobs",
+      icon: "Briefcase",
+    },
+    {
+      title: "Tests",
+      href: "/candidate/tests",
       icon: "FileText",
     },
     {
-      title: "Find Jobs",
-      href: "/candidate/jobs",
-      icon: "Search",
-    },
-    {
       title: "Interviews",
-      href: "/candidate/tests",
+      href: "/candidate/interviews",
       icon: "Calendar",
-    },
-    {
-      title: "Feedback",
-      href: "/candidate/feedback",
-      icon: "MessageSquare",
-    },
-    {
-      title: "Settings",
-      href: "/candidate/settings",
-      icon: "Settings",
     },
     {
       title: "Profile",
       href: "/candidate/profile",
       icon: "User",
+    },
+    {
+      title: "Help Center",
+      href: "/candidate/help",
+      icon: "HelpCircle",
+    },
+    {
+      title: "Logout",
+      href: "/login",
+      icon: "LogOut",
+      className: "text-red-500 hover:text-red-600",
     }
   ];
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-background">
       <Sidebar
         items={sidebarItems}
         userType="candidate"
-        aiAssistantTitle="Interview Coach"
+        aiAssistantTitle="Career Assistant"
         iconMap={iconMap}
       />
-      <main className="flex-1 overflow-y-auto ml-64">
-        <div className="container mx-auto py-6">
-          {children}
-        </div>
-      </main>
+      <div className="flex-1">
+        <Header userType="candidate" />
+        <main className="overflow-y-auto ml-64">
+          <div className="container mx-auto py-6">
+            {children}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
