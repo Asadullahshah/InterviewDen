@@ -1,236 +1,270 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Checkbox } from "@/components/ui/checkbox"
-import { InterviewDenLogo } from "@/components/logo"
+import { createSupabaseBrowserClient } from "@/lib/supabase"
+import { toast } from "sonner"
 
 export default function SignupPage() {
+  const supabase = createSupabaseBrowserClient()
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const type = searchParams.get("type") || "candidate"
-
-  const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
-  const [companyName, setCompanyName] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+    confirmPassword: "",
+    name: "",
+    companyName: "",
+    industry: "",
+    size: "",
+    website: "",
+    location: "",
+    description: "",
+  })
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }))
+  }
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+  const handleSignup = async (userType: "candidate" | "company") => {
+    try {
+      setIsLoading(true)
 
-    // Redirect based on user type
-    if (type === "candidate") {
-      router.push("/candidate/dashboard")
-    } else {
-      router.push("/company/dashboard")
+      if (formData.password !== formData.confirmPassword) {
+        throw new Error("Passwords do not match")
+      }
+
+      const { data, error } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            user_type: userType,
+            name: formData.name,
+          },
+        },
+      })
+
+      if (error) {
+        throw error
+      }
+
+      if (data.user) {
+        // Insert into profiles
+        const { error: profileError } = await supabase.from("profiles").insert({
+          id: data.user.id,
+          email: formData.email,
+          name: userType === "company" ? formData.companyName : formData.name,
+          user_type: userType,
+        })
+        if (profileError) throw profileError
+
+        // Insert into companies if company
+        if (userType === "company") {
+          const { error: companyError } = await supabase.from("companies").insert({
+            id: data.user.id,
+            company_name: formData.companyName,
+            industry: formData.industry,
+            size: formData.size,
+            website: formData.website,
+            location: formData.location,
+            description: formData.description,
+          })
+          if (companyError) throw companyError
+        }
+
+        toast.success("Signup successful! Please check your email for verification.")
+        router.push("/login")
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to sign up")
+    } finally {
+      setIsLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex flex-col justify-center items-center bg-slate-50 p-4">
-      <Link href="/" className="mb-8 flex items-center gap-2">
-        <InterviewDenLogo className="w-8 h-8" />
-        <span className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
-          InterviewDen
-        </span>
-      </Link>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow-lg">
+        <div className="text-center">
+          <h2 className="text-3xl font-bold text-gray-900">Create an account</h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Sign up to get started
+          </p>
+        </div>
 
-      <div className="w-full max-w-md">
-        <Tabs defaultValue={type} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-8">
-            <TabsTrigger
-              value="candidate"
-              onClick={() => router.push("/signup?type=candidate")}
-              className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white"
-            >
-              Candidate
-            </TabsTrigger>
-            <TabsTrigger
-              value="company"
-              onClick={() => router.push("/signup?type=company")}
-              className="data-[state=active]:bg-violet-600 data-[state=active]:text-white"
-            >
-              Company
-            </TabsTrigger>
+        <Tabs defaultValue="candidate" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="candidate">Candidate</TabsTrigger>
+            <TabsTrigger value="company">Company</TabsTrigger>
           </TabsList>
 
           <TabsContent value="candidate">
-            <div className="bg-white p-8 rounded-lg shadow-md border border-slate-200">
-              <h1 className="text-2xl font-bold text-slate-900 mb-6">Create Candidate Account</h1>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="candidate-name">Full Name</Label>
-                  <Input
-                    id="candidate-name"
-                    placeholder="John Doe"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="candidate-email">Email</Label>
-                  <Input
-                    id="candidate-email"
-                    type="email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="candidate-password">Password</Label>
-                  <Input
-                    id="candidate-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="candidate-confirm-password">Confirm Password</Label>
-                  <Input
-                    id="candidate-confirm-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox id="candidate-terms" required />
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                handleSignup("candidate")
+              }}
+              className="mt-8 space-y-6"
+            >
+              <div className="space-y-4">
+                <div>
                   <label
-                    htmlFor="candidate-terms"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    htmlFor="name"
+                    className="block text-sm font-medium text-gray-700"
                   >
-                    I agree to the{" "}
-                    <Link href="/terms" className="text-indigo-600 hover:text-indigo-800">
-                      terms of service
-                    </Link>{" "}
-                    and{" "}
-                    <Link href="/privacy" className="text-indigo-600 hover:text-indigo-800">
-                      privacy policy
-                    </Link>
+                    Full Name
                   </label>
+                  <Input
+                    id="name"
+                    name="name"
+                    type="text"
+                    required
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    className="mt-1"
+                  />
                 </div>
-                <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700" disabled={isLoading}>
-                  {isLoading ? "Creating account..." : "Create account"}
-                </Button>
-              </form>
-              <div className="mt-6 text-center">
-                <p className="text-sm text-slate-600">
-                  Already have an account?{" "}
-                  <Link href="/login?type=candidate" className="text-indigo-600 hover:text-indigo-800 font-medium">
-                    Log in
-                  </Link>
-                </p>
+
+                <div>
+                  <label
+                    htmlFor="email"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Email address
+                  </label>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    className="mt-1"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="password"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Password
+                  </label>
+                  <Input
+                    id="password"
+                    name="password"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    value={formData.password}
+                    onChange={handleInputChange}
+                    className="mt-1"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="confirmPassword"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Confirm Password
+                  </label>
+                  <Input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    value={formData.confirmPassword}
+                    onChange={handleInputChange}
+                    className="mt-1"
+                  />
+                </div>
               </div>
-            </div>
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isLoading}
+              >
+                {isLoading ? "Creating account..." : "Sign up as Candidate"}
+              </Button>
+
+              <div className="text-center text-sm">
+                Already have an account?{" "}
+                <Link href="/login" className="text-indigo-600 hover:text-indigo-800">
+                  Sign in
+                </Link>
+              </div>
+            </form>
           </TabsContent>
 
           <TabsContent value="company">
-            <div className="bg-white p-8 rounded-lg shadow-md border border-slate-200">
-              <h1 className="text-2xl font-bold text-slate-900 mb-6">Create Company Account</h1>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="company-name">Company Name</Label>
-                  <Input
-                    id="company-name"
-                    placeholder="Acme Inc."
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    required
-                  />
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                handleSignup("company")
+              }}
+              className="mt-8 space-y-6"
+            >
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="companyName" className="block text-sm font-medium text-gray-700">Company Name</label>
+                  <Input id="companyName" name="companyName" type="text" required value={formData.companyName} onChange={handleInputChange} className="mt-1" />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="admin-name">Admin Name</Label>
-                  <Input
-                    id="admin-name"
-                    placeholder="John Doe"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                  />
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email address</label>
+                  <Input id="email" name="email" type="email" autoComplete="email" required value={formData.email} onChange={handleInputChange} className="mt-1" />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="company-email">Email</Label>
-                  <Input
-                    id="company-email"
-                    type="email"
-                    placeholder="admin@company.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
+                <div>
+                  <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
+                  <Input id="password" name="password" type="password" autoComplete="new-password" required value={formData.password} onChange={handleInputChange} className="mt-1" />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="company-password">Password</Label>
-                  <Input
-                    id="company-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
+                <div>
+                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">Confirm Password</label>
+                  <Input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" required value={formData.confirmPassword} onChange={handleInputChange} className="mt-1" />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="company-confirm-password">Confirm Password</Label>
-                  <Input
-                    id="company-confirm-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                  />
+                <div>
+                  <label htmlFor="industry" className="block text-sm font-medium text-gray-700">Industry</label>
+                  <Input id="industry" name="industry" type="text" value={formData.industry} onChange={handleInputChange} className="mt-1" />
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox id="company-terms" required />
-                  <label
-                    htmlFor="company-terms"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    I agree to the{" "}
-                    <Link href="/terms" className="text-violet-600 hover:text-violet-800">
-                      terms of service
-                    </Link>{" "}
-                    and{" "}
-                    <Link href="/privacy" className="text-violet-600 hover:text-violet-800">
-                      privacy policy
-                    </Link>
-                  </label>
+                <div>
+                  <label htmlFor="size" className="block text-sm font-medium text-gray-700">Company Size</label>
+                  <Input id="size" name="size" type="text" value={formData.size} onChange={handleInputChange} className="mt-1" />
                 </div>
-                <Button type="submit" className="w-full bg-violet-600 hover:bg-violet-700" disabled={isLoading}>
-                  {isLoading ? "Creating account..." : "Create account"}
-                </Button>
-              </form>
-              <div className="mt-6 text-center">
-                <p className="text-sm text-slate-600">
-                  Already have an account?{" "}
-                  <Link href="/login?type=company" className="text-violet-600 hover:text-violet-800 font-medium">
-                    Log in
-                  </Link>
-                </p>
+                <div>
+                  <label htmlFor="website" className="block text-sm font-medium text-gray-700">Website</label>
+                  <Input id="website" name="website" type="text" value={formData.website} onChange={handleInputChange} className="mt-1" />
+                </div>
+                <div>
+                  <label htmlFor="location" className="block text-sm font-medium text-gray-700">Location</label>
+                  <Input id="location" name="location" type="text" value={formData.location} onChange={handleInputChange} className="mt-1" />
+                </div>
+                <div>
+                  <label htmlFor="description" className="block text-sm font-medium text-gray-700">Description</label>
+                  <textarea id="description" name="description" value={formData.description} onChange={handleInputChange} className="mt-1 w-full border rounded p-2" rows={3} />
+                </div>
               </div>
-            </div>
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? "Creating account..." : "Sign up as Company"}
+              </Button>
+              <div className="text-center text-sm">
+                Already have an account?{" "}
+                <Link href="/login" className="text-indigo-600 hover:text-indigo-800">
+                  Sign in
+                </Link>
+              </div>
+            </form>
           </TabsContent>
         </Tabs>
       </div>

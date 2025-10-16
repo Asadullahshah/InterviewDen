@@ -2,16 +2,18 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { InterviewDenLogo } from "@/components/logo"
+import { createSupabaseBrowserClient } from "@/lib/supabase"
 
 interface SidebarProps {
   items: {
     title: string;
     href: string;
     icon: string;
+    className?: string;
   }[];
   userType: "candidate" | "company";
   aiAssistantTitle?: string;
@@ -34,6 +36,8 @@ export function Sidebar({
   ...props
 }: SidebarProps) {
   const pathname = usePathname()
+  const router = useRouter()
+  const supabase = createSupabaseBrowserClient()
 
   const sidebarBgColor = userType === "candidate" ? "bg-indigo-600" : "bg-violet-600"
   const sidebarBorderColor = userType === "candidate" ? "border-indigo-500" : "border-violet-500"
@@ -45,6 +49,11 @@ export function Sidebar({
   const aiBoxTextColor = userType === "candidate" ? "text-indigo-200" : "text-violet-200"
   const aiButtonBgColor = userType === "candidate" ? "text-indigo-700" : "text-violet-700"
   const aiButtonHoverColor = userType === "candidate" ? "hover:bg-indigo-100" : "hover:bg-violet-100"
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    window.location.href = "/login"
+  }
 
   return (
     <div className={cn("hidden md:flex w-64 flex-col fixed inset-y-0 z-50", sidebarBgColor, className)} {...props}>
@@ -59,6 +68,24 @@ export function Sidebar({
           {items.map((item) => {
             const isActive = pathname === item.href
             const Icon = iconMap[item.icon]
+            if (item.title === "Logout") {
+              return (
+                <Button
+                  key={item.href}
+                  variant="ghost"
+                  className={cn(
+                    "flex justify-start gap-2 px-3 py-2 h-auto",
+                    item.className,
+                    sidebarTextHoverColor,
+                    sidebarHoverColor,
+                  )}
+                  onClick={handleLogout}
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.title}
+                </Button>
+              )
+            }
             return (
               <Button
                 key={item.href}

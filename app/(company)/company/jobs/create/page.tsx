@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ArrowLeft, ArrowRight, DollarSign, MapPin } from "lucide-react"
+import { createClient } from "@/utils/supabase/client"
+import { toast } from "sonner"
 
 const steps = [
   { id: "job-details", name: "Job Details" },
@@ -20,22 +22,316 @@ const steps = [
   { id: "interview-settings", name: "Interview Settings" },
 ]
 
+interface JobFormData {
+  // Step 1 fields
+  title: string
+  department: string
+  description: string
+  location: string
+  type: string
+  requirements: string[]
+  benefits: string[]
+  salary_min: number | null
+  salary_max: number | null
+  currency: string
+  is_remote: boolean
+  has_relocation: boolean
+  has_sponsorship: boolean
+  
+  // Step 2 fields
+  overview: string
+  responsibilities: string[]
+  detailed_requirements: string[]
+  detailed_benefits: string[]
+  
+  // Step 3 fields
+  required_documents: {
+    resume: boolean
+    cover_letter: boolean
+    portfolio: boolean
+    references: boolean
+  }
+  required_skills: Array<{
+    name: string
+    years: string
+  }>
+  min_education: string
+  ai_screening_enabled: boolean
+  
+  // Step 4 fields
+  test_requirements: {
+    technical_test: boolean
+    personality_test: boolean
+    cognitive_test: boolean
+    language_test: boolean
+  }
+  technical_test_config: {
+    difficulty: string
+    duration: string
+    topics: string[]
+    custom_questions: string
+    weightage: number
+    passing_score: number
+  }
+  ai_test_generation: boolean
+  
+  // Step 5 fields
+  interview_stages: {
+    ai_screening: boolean
+    technical: boolean
+    behavioral: boolean
+    final: boolean
+  }
+  ai_interview_config: {
+    format: 'video' | 'audio' | 'text'
+    duration: string
+    custom_questions: string
+  }
+  automated_scheduling: boolean
+  ai_feedback: boolean
+  
+  // Common fields
+  status: 'draft' | 'published'
+  step: number
+  
+  // Stage weightages
+  stage_weightages: {
+    resume_screening: number
+    technical_quiz: number
+    coding_test: number
+    interview: number
+  }
+  
+  // Coding test specific fields
+  coding_test_config: {
+    difficulty: string
+    duration: string
+    languages: string[]
+    custom_questions: string
+    weightage: number
+    passing_score: number
+  }
+  
+  // Interview specific fields
+  interview_config: {
+    format: 'video' | 'audio' | 'text'
+    duration: string
+    custom_questions: string
+    weightage: number
+    passing_score: number
+  }
+}
+
+const isFirstStep = (step: number): step is 0 => step === 0
+
 export default function CreateJobPage() {
   const router = useRouter()
-  const [currentStep, setCurrentStep] = useState(0)
+  const [currentStep, setCurrentStep] = useState<0 | 1 | 2 | 3 | 4>(0)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [formData, setFormData] = useState<JobFormData>({
+    // Step 1 fields
+    title: '',
+    department: '',
+    description: '',
+    location: '',
+    type: '',
+    requirements: [],
+    benefits: [],
+    salary_min: null,
+    salary_max: null,
+    currency: 'USD',
+    is_remote: false,
+    has_relocation: false,
+    has_sponsorship: false,
+    
+    // Step 2 fields
+    overview: '',
+    responsibilities: [],
+    detailed_requirements: [],
+    detailed_benefits: [],
+    
+    // Step 3 fields
+    required_documents: {
+      resume: true,
+      cover_letter: false,
+      portfolio: false,
+      references: false
+    },
+    required_skills: [],
+    min_education: 'none',
+    ai_screening_enabled: true,
+    
+    // Step 4 fields
+    test_requirements: {
+      technical_test: true,
+      personality_test: false,
+      cognitive_test: false,
+      language_test: false
+    },
+    technical_test_config: {
+      difficulty: 'medium',
+      duration: '60',
+      topics: ['frontend'],
+      custom_questions: '',
+      weightage: 30,
+      passing_score: 70
+    },
+    ai_test_generation: true,
+    
+    // Step 5 fields
+    interview_stages: {
+      ai_screening: true,
+      technical: true,
+      behavioral: true,
+      final: false
+    },
+    ai_interview_config: {
+      format: 'video',
+      duration: '30',
+      custom_questions: ''
+    },
+    automated_scheduling: true,
+    ai_feedback: true,
+    
+    // Common fields
+    status: 'draft',
+    step: 1,
+    
+    // Initialize stage weightages
+    stage_weightages: {
+      resume_screening: 20,
+      technical_quiz: 30,
+      coding_test: 30,
+      interview: 20
+    },
+    
+    // Initialize coding test config
+    coding_test_config: {
+      difficulty: 'medium',
+      duration: '90',
+      languages: ['javascript', 'python'],
+      custom_questions: '',
+      weightage: 30,
+      passing_score: 70
+    },
+    
+    // Initialize interview config
+    interview_config: {
+      format: 'video',
+      duration: '45',
+      custom_questions: '',
+      weightage: 20,
+      passing_score: 70
+    }
+  })
 
-  const nextStep = () => {
-    if (currentStep < steps.length - 1) {
-      setCurrentStep(currentStep + 1)
+  const supabase = createClient()
+
+  const handleInputChange = (field: keyof JobFormData, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
+  const saveDraft = async () => {
+    try {
+      setIsSubmitting(true)
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        toast.error('You must be logged in to create a job')
+        return
+      }
+
+      // Get company_id from profiles table using user id
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('id', user.id)
+        .single()
+
+      if (!profile?.company_id) {
+        toast.error('Company profile not found')
+        return
+      }
+
+      const { error } = await supabase
+        .from('jobs')
+        .insert({
+          ...formData,
+          company_id: profile.company_id,
+          step: currentStep + 1
+        })
+
+      if (error) throw error
+
+      toast.success('Draft saved successfully')
+    } catch (error) {
+      console.error('Error saving draft:', error)
+      toast.error('Failed to save draft')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const nextStep = async () => {
+    if (currentStep < 4) {
+      // Save current step as draft
+      await saveDraft()
+      setCurrentStep((currentStep + 1) as 0 | 1 | 2 | 3 | 4)
     } else {
-      // Submit the form
-      router.push("/company/jobs")
+      // Submit the final form
+      await submitJob()
+    }
+  }
+
+  const submitJob = async () => {
+    try {
+      setIsSubmitting(true)
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        toast.error('You must be logged in to create a job')
+        return
+      }
+
+      // Get company_id from profiles table using user id
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('id', user.id)
+        .single()
+
+      if (!profile?.company_id) {
+        toast.error('Company profile not found')
+        return
+      }
+
+      const { error } = await supabase
+        .from('jobs')
+        .insert({
+          ...formData,
+          company_id: profile.company_id,
+          status: 'published',
+          step: steps.length
+        })
+
+      if (error) throw error
+
+      toast.success('Job posted successfully')
+      router.push('/company/jobs')
+    } catch (error) {
+      console.error('Error posting job:', error)
+      toast.error('Failed to post job')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   const prevStep = () => {
     if (currentStep > 0) {
-      setCurrentStep(currentStep - 1)
+      setCurrentStep((currentStep - 1) as 0 | 1 | 2 | 3 | 4)
     }
   }
 
@@ -111,21 +407,29 @@ export default function CreateJobPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="title">Job Title</Label>
-                  <Input id="title" placeholder="e.g. Senior Frontend Developer" />
+                  <Input 
+                    id="title" 
+                    placeholder="e.g. Senior Software Engineer"
+                    value={formData.title}
+                    onChange={(e) => handleInputChange('title', e.target.value)}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="department">Department</Label>
-                  <Select>
+                  <Select 
+                    value={formData.department}
+                    onValueChange={(value) => handleInputChange('department', value)}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select department" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="engineering">Engineering</SelectItem>
-                      <SelectItem value="design">Design</SelectItem>
-                      <SelectItem value="product">Product</SelectItem>
-                      <SelectItem value="marketing">Marketing</SelectItem>
-                      <SelectItem value="sales">Sales</SelectItem>
-                      <SelectItem value="hr">Human Resources</SelectItem>
+                      <SelectItem value="engineering">Software Engineering</SelectItem>
+                      <SelectItem value="frontend">Frontend Development</SelectItem>
+                      <SelectItem value="backend">Backend Development</SelectItem>
+                      <SelectItem value="mobile">Mobile Development</SelectItem>
+                      <SelectItem value="devops">DevOps & Cloud</SelectItem>
+                      <SelectItem value="qa">Quality Assurance</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -137,25 +441,46 @@ export default function CreateJobPage() {
                   id="description"
                   placeholder="Describe the role, responsibilities, and requirements..."
                   className="min-h-[200px]"
+                  value={formData.description}
+                  onChange={(e) => handleInputChange('description', e.target.value)}
                 />
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="location">Location</Label>
-                  <Input id="location" placeholder="e.g. New York, NY or Remote" />
+                  <Select
+                    value={formData.location}
+                    onValueChange={(value) => handleInputChange('location', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select location" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="karachi">Karachi</SelectItem>
+                      <SelectItem value="lahore">Lahore</SelectItem>
+                      <SelectItem value="islamabad">Islamabad</SelectItem>
+                      <SelectItem value="hyderabad">Hyderabad</SelectItem>
+                      <SelectItem value="peshawar">Peshawar</SelectItem>
+                      <SelectItem value="remote">Remote (Pakistan)</SelectItem>
+                      <SelectItem value="hybrid">Hybrid</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="type">Employment Type</Label>
-                  <Select>
+                  <Select
+                    value={formData.type}
+                    onValueChange={(value) => handleInputChange('type', value)}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="full-time">Full-time</SelectItem>
-                      <SelectItem value="part-time">Part-time</SelectItem>
                       <SelectItem value="contract">Contract</SelectItem>
                       <SelectItem value="internship">Internship</SelectItem>
+                      <SelectItem value="freelance">Freelance</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -167,6 +492,8 @@ export default function CreateJobPage() {
                   id="requirements"
                   placeholder="List the required skills, experience, and qualifications..."
                   className="min-h-[150px]"
+                  value={formData.requirements.join('\n')}
+                  onChange={(e) => handleInputChange('requirements', e.target.value.split('\n').filter(Boolean))}
                 />
               </div>
 
@@ -176,14 +503,26 @@ export default function CreateJobPage() {
                   id="benefits"
                   placeholder="Describe the benefits and perks of working at your company..."
                   className="min-h-[150px]"
+                  value={formData.benefits.join('\n')}
+                  onChange={(e) => handleInputChange('benefits', e.target.value.split('\n').filter(Boolean))}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label>Salary Range</Label>
+                <Label>Salary Range (PKR)</Label>
                 <div className="grid gap-4 md:grid-cols-2">
-                  <Input placeholder="Minimum salary" type="number" />
-                  <Input placeholder="Maximum salary" type="number" />
+                  <Input 
+                    placeholder="Minimum salary" 
+                    type="number"
+                    value={formData.salary_min || ''}
+                    onChange={(e) => handleInputChange('salary_min', e.target.value ? Number(e.target.value) : null)}
+                  />
+                  <Input 
+                    placeholder="Maximum salary" 
+                    type="number"
+                    value={formData.salary_max || ''}
+                    onChange={(e) => handleInputChange('salary_max', e.target.value ? Number(e.target.value) : null)}
+                  />
                 </div>
               </div>
 
@@ -191,20 +530,40 @@ export default function CreateJobPage() {
                 <Label>Additional Options</Label>
                 <div className="space-y-2">
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="remote" />
+                    <Checkbox 
+                      id="remote" 
+                      checked={formData.is_remote}
+                      onCheckedChange={(checked) => handleInputChange('is_remote', checked)}
+                    />
                     <Label htmlFor="remote">Remote work allowed</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="relocation" />
+                    <Checkbox 
+                      id="relocation"
+                      checked={formData.has_relocation}
+                      onCheckedChange={(checked) => handleInputChange('has_relocation', checked)}
+                    />
                     <Label htmlFor="relocation">Relocation assistance available</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="sponsorship" />
+                    <Checkbox 
+                      id="sponsorship"
+                      checked={formData.has_sponsorship}
+                      onCheckedChange={(checked) => handleInputChange('has_sponsorship', checked)}
+                    />
                     <Label htmlFor="sponsorship">Visa sponsorship available</Label>
                   </div>
                 </div>
               </div>
             </CardContent>
+            <CardFooter className="flex justify-between">
+              <Button variant="outline" onClick={prevStep} disabled={isFirstStep(currentStep)}>
+                Previous
+              </Button>
+              <Button onClick={nextStep} disabled={isSubmitting}>
+                {isSubmitting ? 'Saving...' : 'Next Step'}
+              </Button>
+            </CardFooter>
           </>
         )}
 
@@ -223,6 +582,8 @@ export default function CreateJobPage() {
                   id="overview"
                   placeholder="Provide a brief overview of the role and your company..."
                   className="min-h-[100px]"
+                  value={formData.overview}
+                  onChange={(e) => handleInputChange('overview', e.target.value)}
                 />
               </div>
 
@@ -232,27 +593,41 @@ export default function CreateJobPage() {
                   id="responsibilities"
                   placeholder="List the key responsibilities for this role..."
                   className="min-h-[150px]"
+                  value={formData.responsibilities.join('\n')}
+                  onChange={(e) => handleInputChange('responsibilities', e.target.value.split('\n').filter(Boolean))}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="requirements">Requirements</Label>
+                <Label htmlFor="detailed-requirements">Detailed Requirements</Label>
                 <Textarea
-                  id="requirements"
+                  id="detailed-requirements"
                   placeholder="List the skills, qualifications, and experience required..."
                   className="min-h-[150px]"
+                  value={formData.detailed_requirements.join('\n')}
+                  onChange={(e) => handleInputChange('detailed_requirements', e.target.value.split('\n').filter(Boolean))}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="benefits">Benefits & Perks</Label>
+                <Label htmlFor="detailed-benefits">Detailed Benefits & Perks</Label>
                 <Textarea
-                  id="benefits"
+                  id="detailed-benefits"
                   placeholder="Describe the benefits and perks offered with this position..."
                   className="min-h-[100px]"
+                  value={formData.detailed_benefits.join('\n')}
+                  onChange={(e) => handleInputChange('detailed_benefits', e.target.value.split('\n').filter(Boolean))}
                 />
               </div>
             </CardContent>
+            <CardFooter className="flex justify-between">
+              <Button variant="outline" onClick={prevStep} disabled={isFirstStep(currentStep)}>
+                Previous
+              </Button>
+              <Button onClick={nextStep} disabled={isSubmitting}>
+                {isSubmitting ? 'Saving...' : 'Next Step'}
+              </Button>
+            </CardFooter>
           </>
         )}
 
@@ -267,7 +642,14 @@ export default function CreateJobPage() {
                 <Label>Required Documents</Label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="flex items-start space-x-2">
-                    <Checkbox id="resume" defaultChecked />
+                    <Checkbox 
+                      id="resume" 
+                      checked={formData.required_documents.resume}
+                      onCheckedChange={(checked) => handleInputChange('required_documents', {
+                        ...formData.required_documents,
+                        resume: checked as boolean
+                      })}
+                    />
                     <div className="grid gap-1.5 leading-none">
                       <Label htmlFor="resume" className="cursor-pointer">
                         Resume/CV
@@ -276,7 +658,14 @@ export default function CreateJobPage() {
                     </div>
                   </div>
                   <div className="flex items-start space-x-2">
-                    <Checkbox id="cover-letter" />
+                    <Checkbox 
+                      id="cover-letter"
+                      checked={formData.required_documents.cover_letter}
+                      onCheckedChange={(checked) => handleInputChange('required_documents', {
+                        ...formData.required_documents,
+                        cover_letter: checked as boolean
+                      })}
+                    />
                     <div className="grid gap-1.5 leading-none">
                       <Label htmlFor="cover-letter" className="cursor-pointer">
                         Cover Letter
@@ -285,7 +674,14 @@ export default function CreateJobPage() {
                     </div>
                   </div>
                   <div className="flex items-start space-x-2">
-                    <Checkbox id="portfolio" />
+                    <Checkbox 
+                      id="portfolio"
+                      checked={formData.required_documents.portfolio}
+                      onCheckedChange={(checked) => handleInputChange('required_documents', {
+                        ...formData.required_documents,
+                        portfolio: checked as boolean
+                      })}
+                    />
                     <div className="grid gap-1.5 leading-none">
                       <Label htmlFor="portfolio" className="cursor-pointer">
                         Portfolio
@@ -294,7 +690,14 @@ export default function CreateJobPage() {
                     </div>
                   </div>
                   <div className="flex items-start space-x-2">
-                    <Checkbox id="references" />
+                    <Checkbox 
+                      id="references"
+                      checked={formData.required_documents.references}
+                      onCheckedChange={(checked) => handleInputChange('required_documents', {
+                        ...formData.required_documents,
+                        references: checked as boolean
+                      })}
+                    />
                     <div className="grid gap-1.5 leading-none">
                       <Label htmlFor="references" className="cursor-pointer">
                         References
@@ -308,51 +711,54 @@ export default function CreateJobPage() {
               <div className="space-y-2">
                 <Label>Required Skills</Label>
                 <div className="border rounded-md p-4 space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="skill-1">Skill 1</Label>
-                      <Input id="skill-1" placeholder="e.g. React.js" />
+                  {formData.required_skills.map((skill, index) => (
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor={`skill-${index}`}>Skill {index + 1}</Label>
+                        <Input 
+                          id={`skill-${index}`} 
+                          placeholder="e.g. React.js"
+                          value={skill.name}
+                          onChange={(e) => {
+                            const newSkills = [...formData.required_skills]
+                            newSkills[index] = { ...skill, name: e.target.value }
+                            handleInputChange('required_skills', newSkills)
+                          }}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`skill-${index}-years`}>Years of Experience</Label>
+                        <Select
+                          value={skill.years}
+                          onValueChange={(value) => {
+                            const newSkills = [...formData.required_skills]
+                            newSkills[index] = { ...skill, years: value }
+                            handleInputChange('required_skills', newSkills)
+                          }}
+                        >
+                          <SelectTrigger id={`skill-${index}-years`}>
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="any">Any</SelectItem>
+                            <SelectItem value="1">1+ years</SelectItem>
+                            <SelectItem value="2">2+ years</SelectItem>
+                            <SelectItem value="3">3+ years</SelectItem>
+                            <SelectItem value="5">5+ years</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="skill-1-years">Years of Experience</Label>
-                      <Select>
-                        <SelectTrigger id="skill-1-years">
-                          <SelectValue placeholder="Select" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="any">Any</SelectItem>
-                          <SelectItem value="1">1+ years</SelectItem>
-                          <SelectItem value="2">2+ years</SelectItem>
-                          <SelectItem value="3">3+ years</SelectItem>
-                          <SelectItem value="5">5+ years</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
+                  ))}
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="skill-2">Skill 2</Label>
-                      <Input id="skill-2" placeholder="e.g. TypeScript" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="skill-2-years">Years of Experience</Label>
-                      <Select>
-                        <SelectTrigger id="skill-2-years">
-                          <SelectValue placeholder="Select" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="any">Any</SelectItem>
-                          <SelectItem value="1">1+ years</SelectItem>
-                          <SelectItem value="2">2+ years</SelectItem>
-                          <SelectItem value="3">3+ years</SelectItem>
-                          <SelectItem value="5">5+ years</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <Button variant="outline" className="w-full">
+                  <Button 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={() => handleInputChange('required_skills', [
+                      ...formData.required_skills,
+                      { name: '', years: 'any' }
+                    ])}
+                  >
                     + Add Another Skill
                   </Button>
                 </div>
@@ -360,7 +766,10 @@ export default function CreateJobPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="education">Minimum Education</Label>
-                <Select>
+                <Select
+                  value={formData.min_education}
+                  onValueChange={(value) => handleInputChange('min_education', value)}
+                >
                   <SelectTrigger id="education">
                     <SelectValue placeholder="Select education level" />
                   </SelectTrigger>
@@ -378,7 +787,11 @@ export default function CreateJobPage() {
               <div className="space-y-2">
                 <Label htmlFor="ai-screening">AI Resume Screening</Label>
                 <div className="flex items-start space-x-2">
-                  <Checkbox id="ai-screening" defaultChecked />
+                  <Checkbox 
+                    id="ai-screening" 
+                    checked={formData.ai_screening_enabled}
+                    onCheckedChange={(checked) => handleInputChange('ai_screening_enabled', checked)}
+                  />
                   <div className="grid gap-1.5 leading-none">
                     <Label htmlFor="ai-screening" className="cursor-pointer">
                       Enable AI Resume Screening
@@ -390,6 +803,14 @@ export default function CreateJobPage() {
                 </div>
               </div>
             </CardContent>
+            <CardFooter className="flex justify-between">
+              <Button variant="outline" onClick={prevStep} disabled={isFirstStep(currentStep)}>
+                Previous
+              </Button>
+              <Button onClick={nextStep} disabled={isSubmitting}>
+                {isSubmitting ? 'Saving...' : 'Next Step'}
+              </Button>
+            </CardFooter>
           </>
         )}
 
@@ -400,78 +821,109 @@ export default function CreateJobPage() {
               <CardDescription>Set up skills assessments and tests for candidates.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label>Assessment Types</Label>
+              <div className="space-y-4">
+                <Label>Stage Weightages</Label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-start space-x-2">
-                    <Checkbox id="technical-test" defaultChecked />
-                    <div className="grid gap-1.5 leading-none">
-                      <Label htmlFor="technical-test" className="cursor-pointer">
-                        Technical Skills Test
-                      </Label>
-                      <p className="text-sm text-slate-500">Coding challenges and technical questions</p>
-                    </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="resume-weightage">Resume Screening Weightage (%)</Label>
+                    <Input 
+                      id="resume-weightage"
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={formData.stage_weightages.resume_screening}
+                      onChange={(e) => handleInputChange('stage_weightages', {
+                        ...formData.stage_weightages,
+                        resume_screening: Number(e.target.value)
+                      })}
+                    />
                   </div>
-                  <div className="flex items-start space-x-2">
-                    <Checkbox id="personality-test" />
-                    <div className="grid gap-1.5 leading-none">
-                      <Label htmlFor="personality-test" className="cursor-pointer">
-                        Personality Assessment
-                      </Label>
-                      <p className="text-sm text-slate-500">Evaluate cultural fit and work style</p>
-                    </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="technical-weightage">Technical Quiz Weightage (%)</Label>
+                    <Input 
+                      id="technical-weightage"
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={formData.stage_weightages.technical_quiz}
+                      onChange={(e) => handleInputChange('stage_weightages', {
+                        ...formData.stage_weightages,
+                        technical_quiz: Number(e.target.value)
+                      })}
+                    />
                   </div>
-                  <div className="flex items-start space-x-2">
-                    <Checkbox id="cognitive-test" />
-                    <div className="grid gap-1.5 leading-none">
-                      <Label htmlFor="cognitive-test" className="cursor-pointer">
-                        Cognitive Ability Test
-                      </Label>
-                      <p className="text-sm text-slate-500">Problem-solving and critical thinking</p>
-                    </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="coding-weightage">Coding Test Weightage (%)</Label>
+                    <Input 
+                      id="coding-weightage"
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={formData.stage_weightages.coding_test}
+                      onChange={(e) => handleInputChange('stage_weightages', {
+                        ...formData.stage_weightages,
+                        coding_test: Number(e.target.value)
+                      })}
+                    />
                   </div>
-                  <div className="flex items-start space-x-2">
-                    <Checkbox id="language-test" />
-                    <div className="grid gap-1.5 leading-none">
-                      <Label htmlFor="language-test" className="cursor-pointer">
-                        Language Proficiency
-                      </Label>
-                      <p className="text-sm text-slate-500">Assess language skills</p>
-                    </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="interview-weightage">Interview Weightage (%)</Label>
+                    <Input 
+                      id="interview-weightage"
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={formData.stage_weightages.interview}
+                      onChange={(e) => handleInputChange('stage_weightages', {
+                        ...formData.stage_weightages,
+                        interview: Number(e.target.value)
+                      })}
+                    />
                   </div>
                 </div>
               </div>
 
               <div className="space-y-4">
-                <Label>Technical Skills Test Configuration</Label>
+                <Label>Technical Quiz Configuration</Label>
                 <div className="border rounded-md p-4 space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="test-difficulty">Difficulty Level</Label>
-                    <Select>
+                    <Select
+                      value={formData.technical_test_config.difficulty}
+                      onValueChange={(value) => handleInputChange('technical_test_config', {
+                        ...formData.technical_test_config,
+                        difficulty: value
+                      })}
+                    >
                       <SelectTrigger id="test-difficulty">
                         <SelectValue placeholder="Select difficulty" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="easy">Easy</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="hard">Hard</SelectItem>
-                        <SelectItem value="expert">Expert</SelectItem>
+                        <SelectItem value="easy">Entry Level (0-2 years)</SelectItem>
+                        <SelectItem value="medium">Mid Level (2-5 years)</SelectItem>
+                        <SelectItem value="hard">Senior Level (5+ years)</SelectItem>
+                        <SelectItem value="expert">Lead/Architect Level</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="test-duration">Test Duration</Label>
-                    <Select>
+                    <Select
+                      value={formData.technical_test_config.duration}
+                      onValueChange={(value) => handleInputChange('technical_test_config', {
+                        ...formData.technical_test_config,
+                        duration: value
+                      })}
+                    >
                       <SelectTrigger id="test-duration">
                         <SelectValue placeholder="Select duration" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="30">30 minutes</SelectItem>
+                        <SelectItem value="45">45 minutes</SelectItem>
                         <SelectItem value="60">1 hour</SelectItem>
                         <SelectItem value="90">1.5 hours</SelectItem>
-                        <SelectItem value="120">2 hours</SelectItem>
-                        <SelectItem value="custom">Custom</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -479,71 +931,150 @@ export default function CreateJobPage() {
                   <div className="space-y-2">
                     <Label>Test Topics</Label>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      <div className="flex items-center space-x-2">
-                        <Checkbox id="topic-algorithms" />
-                        <Label htmlFor="topic-algorithms" className="cursor-pointer">
-                          Algorithms
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox id="topic-data-structures" />
-                        <Label htmlFor="topic-data-structures" className="cursor-pointer">
-                          Data Structures
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox id="topic-frontend" defaultChecked />
-                        <Label htmlFor="topic-frontend" className="cursor-pointer">
-                          Frontend Development
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox id="topic-backend" />
-                        <Label htmlFor="topic-backend" className="cursor-pointer">
-                          Backend Development
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox id="topic-database" />
-                        <Label htmlFor="topic-database" className="cursor-pointer">
-                          Database
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox id="topic-system-design" />
-                        <Label htmlFor="topic-system-design" className="cursor-pointer">
-                          System Design
-                        </Label>
-                      </div>
+                      {[
+                        'javascript', 'react', 'nodejs', 'typescript', 
+                        'python', 'django', 'flask', 'sql',
+                        'aws', 'docker', 'kubernetes', 'ci-cd',
+                        'system-design', 'algorithms', 'data-structures'
+                      ].map((topic) => (
+                        <div key={topic} className="flex items-center space-x-2">
+                          <Checkbox 
+                            id={`topic-${topic}`}
+                            checked={formData.technical_test_config.topics.includes(topic)}
+                            onCheckedChange={(checked) => {
+                              const newTopics = checked
+                                ? [...formData.technical_test_config.topics, topic]
+                                : formData.technical_test_config.topics.filter(t => t !== topic)
+                              handleInputChange('technical_test_config', {
+                                ...formData.technical_test_config,
+                                topics: newTopics
+                              })
+                            }}
+                          />
+                          <Label htmlFor={`topic-${topic}`} className="cursor-pointer">
+                            {topic.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                          </Label>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="custom-questions">Custom Questions</Label>
-                    <Textarea
-                      id="custom-questions"
-                      placeholder="Add any specific questions you'd like to include in the test..."
-                      className="min-h-[100px]"
+                    <Label htmlFor="technical-passing-score">Passing Score (%)</Label>
+                    <Input 
+                      id="technical-passing-score"
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={formData.technical_test_config.passing_score}
+                      onChange={(e) => handleInputChange('technical_test_config', {
+                        ...formData.technical_test_config,
+                        passing_score: Number(e.target.value)
+                      })}
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="ai-test-generation">AI Test Generation</Label>
-                <div className="flex items-start space-x-2">
-                  <Checkbox id="ai-test-generation" defaultChecked />
-                  <div className="grid gap-1.5 leading-none">
-                    <Label htmlFor="ai-test-generation" className="cursor-pointer">
-                      Enable AI Test Generation
-                    </Label>
-                    <p className="text-sm text-slate-500">
-                      Our AI will generate relevant test questions based on the job requirements
-                    </p>
+              <div className="space-y-4">
+                <Label>Coding Test Configuration</Label>
+                <div className="border rounded-md p-4 space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="coding-difficulty">Difficulty Level</Label>
+                    <Select
+                      value={formData.coding_test_config.difficulty}
+                      onValueChange={(value) => handleInputChange('coding_test_config', {
+                        ...formData.coding_test_config,
+                        difficulty: value
+                      })}
+                    >
+                      <SelectTrigger id="coding-difficulty">
+                        <SelectValue placeholder="Select difficulty" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="easy">Entry Level (0-2 years)</SelectItem>
+                        <SelectItem value="medium">Mid Level (2-5 years)</SelectItem>
+                        <SelectItem value="hard">Senior Level (5+ years)</SelectItem>
+                        <SelectItem value="expert">Lead/Architect Level</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="coding-duration">Test Duration</Label>
+                    <Select
+                      value={formData.coding_test_config.duration}
+                      onValueChange={(value) => handleInputChange('coding_test_config', {
+                        ...formData.coding_test_config,
+                        duration: value
+                      })}
+                    >
+                      <SelectTrigger id="coding-duration">
+                        <SelectValue placeholder="Select duration" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="60">1 hour</SelectItem>
+                        <SelectItem value="90">1.5 hours</SelectItem>
+                        <SelectItem value="120">2 hours</SelectItem>
+                        <SelectItem value="180">3 hours</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Programming Languages</Label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {[
+                        'javascript', 'typescript', 'python', 'java',
+                        'csharp', 'php', 'ruby', 'go'
+                      ].map((lang) => (
+                        <div key={lang} className="flex items-center space-x-2">
+                          <Checkbox 
+                            id={`lang-${lang}`}
+                            checked={formData.coding_test_config.languages.includes(lang)}
+                            onCheckedChange={(checked) => {
+                              const newLangs = checked
+                                ? [...formData.coding_test_config.languages, lang]
+                                : formData.coding_test_config.languages.filter(l => l !== lang)
+                              handleInputChange('coding_test_config', {
+                                ...formData.coding_test_config,
+                                languages: newLangs
+                              })
+                            }}
+                          />
+                          <Label htmlFor={`lang-${lang}`} className="cursor-pointer">
+                            {lang.charAt(0).toUpperCase() + lang.slice(1)}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="coding-passing-score">Passing Score (%)</Label>
+                    <Input 
+                      id="coding-passing-score"
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={formData.coding_test_config.passing_score}
+                      onChange={(e) => handleInputChange('coding_test_config', {
+                        ...formData.coding_test_config,
+                        passing_score: Number(e.target.value)
+                      })}
+                    />
                   </div>
                 </div>
               </div>
             </CardContent>
+            <CardFooter className="flex justify-between">
+              <Button variant="outline" onClick={prevStep} disabled={isFirstStep(currentStep)}>
+                Previous
+              </Button>
+              <Button onClick={nextStep} disabled={isSubmitting}>
+                {isSubmitting ? 'Saving...' : 'Next Step'}
+              </Button>
+            </CardFooter>
           </>
         )}
 
@@ -558,7 +1089,14 @@ export default function CreateJobPage() {
                 <Label>Interview Stages</Label>
                 <div className="space-y-4">
                   <div className="flex items-start space-x-2">
-                    <Checkbox id="ai-screening-interview" defaultChecked />
+                    <Checkbox 
+                      id="ai-screening-interview" 
+                      checked={formData.interview_stages.ai_screening}
+                      onCheckedChange={(checked) => handleInputChange('interview_stages', {
+                        ...formData.interview_stages,
+                        ai_screening: checked as boolean
+                      })}
+                    />
                     <div className="grid gap-1.5 leading-none">
                       <Label htmlFor="ai-screening-interview" className="cursor-pointer">
                         AI Screening Interview
@@ -570,7 +1108,14 @@ export default function CreateJobPage() {
                   </div>
 
                   <div className="flex items-start space-x-2">
-                    <Checkbox id="technical-interview" defaultChecked />
+                    <Checkbox 
+                      id="technical-interview"
+                      checked={formData.interview_stages.technical}
+                      onCheckedChange={(checked) => handleInputChange('interview_stages', {
+                        ...formData.interview_stages,
+                        technical: checked as boolean
+                      })}
+                    />
                     <div className="grid gap-1.5 leading-none">
                       <Label htmlFor="technical-interview" className="cursor-pointer">
                         Technical Interview
@@ -580,7 +1125,14 @@ export default function CreateJobPage() {
                   </div>
 
                   <div className="flex items-start space-x-2">
-                    <Checkbox id="behavioral-interview" defaultChecked />
+                    <Checkbox 
+                      id="behavioral-interview"
+                      checked={formData.interview_stages.behavioral}
+                      onCheckedChange={(checked) => handleInputChange('interview_stages', {
+                        ...formData.interview_stages,
+                        behavioral: checked as boolean
+                      })}
+                    />
                     <div className="grid gap-1.5 leading-none">
                       <Label htmlFor="behavioral-interview" className="cursor-pointer">
                         Behavioral Interview
@@ -590,7 +1142,14 @@ export default function CreateJobPage() {
                   </div>
 
                   <div className="flex items-start space-x-2">
-                    <Checkbox id="final-interview" />
+                    <Checkbox 
+                      id="final-interview"
+                      checked={formData.interview_stages.final}
+                      onCheckedChange={(checked) => handleInputChange('interview_stages', {
+                        ...formData.interview_stages,
+                        final: checked as boolean
+                      })}
+                    />
                     <div className="grid gap-1.5 leading-none">
                       <Label htmlFor="final-interview" className="cursor-pointer">
                         Final Interview with Leadership
@@ -601,63 +1160,87 @@ export default function CreateJobPage() {
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <Label>AI Screening Interview Configuration</Label>
-                <div className="border rounded-md p-4 space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="interview-format">Interview Format</Label>
-                    <RadioGroup defaultValue="video" className="flex flex-col gap-2">
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="video" id="video" />
-                        <Label htmlFor="video" className="cursor-pointer">
-                          Video Interview
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="audio" id="audio" />
-                        <Label htmlFor="audio" className="cursor-pointer">
-                          Audio Interview
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="text" id="text" />
-                        <Label htmlFor="text" className="cursor-pointer">
-                          Text-based Interview
-                        </Label>
-                      </div>
-                    </RadioGroup>
-                  </div>
+              {formData.interview_stages.ai_screening && (
+                <div className="space-y-4">
+                  <Label>AI Screening Interview Configuration</Label>
+                  <div className="border rounded-md p-4 space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="interview-format">Interview Format</Label>
+                      <RadioGroup 
+                        value={formData.ai_interview_config.format}
+                        onValueChange={(value) => handleInputChange('ai_interview_config', {
+                          ...formData.ai_interview_config,
+                          format: value as 'video' | 'audio' | 'text'
+                        })}
+                        className="flex flex-col gap-2"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="video" id="video" />
+                          <Label htmlFor="video" className="cursor-pointer">
+                            Video Interview
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="audio" id="audio" />
+                          <Label htmlFor="audio" className="cursor-pointer">
+                            Audio Interview
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="text" id="text" />
+                          <Label htmlFor="text" className="cursor-pointer">
+                            Text-based Interview
+                          </Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="interview-duration">Interview Duration</Label>
-                    <Select>
-                      <SelectTrigger id="interview-duration">
-                        <SelectValue placeholder="Select duration" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="15">15 minutes</SelectItem>
-                        <SelectItem value="30">30 minutes</SelectItem>
-                        <SelectItem value="45">45 minutes</SelectItem>
-                        <SelectItem value="60">1 hour</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="interview-duration">Interview Duration</Label>
+                      <Select
+                        value={formData.ai_interview_config.duration}
+                        onValueChange={(value) => handleInputChange('ai_interview_config', {
+                          ...formData.ai_interview_config,
+                          duration: value
+                        })}
+                      >
+                        <SelectTrigger id="interview-duration">
+                          <SelectValue placeholder="Select duration" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="15">15 minutes</SelectItem>
+                          <SelectItem value="30">30 minutes</SelectItem>
+                          <SelectItem value="45">45 minutes</SelectItem>
+                          <SelectItem value="60">1 hour</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="interview-questions">Custom Interview Questions</Label>
-                    <Textarea
-                      id="interview-questions"
-                      placeholder="Add any specific questions you'd like to include in the AI interview..."
-                      className="min-h-[100px]"
-                    />
+                    <div className="space-y-2">
+                      <Label htmlFor="interview-questions">Custom Interview Questions</Label>
+                      <Textarea
+                        id="interview-questions"
+                        placeholder="Add any specific questions you'd like to include in the AI interview..."
+                        className="min-h-[100px]"
+                        value={formData.ai_interview_config.custom_questions}
+                        onChange={(e) => handleInputChange('ai_interview_config', {
+                          ...formData.ai_interview_config,
+                          custom_questions: e.target.value
+                        })}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="interview-scheduling">Interview Scheduling</Label>
                 <div className="flex items-start space-x-2">
-                  <Checkbox id="interview-scheduling" defaultChecked />
+                  <Checkbox 
+                    id="interview-scheduling" 
+                    checked={formData.automated_scheduling}
+                    onCheckedChange={(checked) => handleInputChange('automated_scheduling', checked)}
+                  />
                   <div className="grid gap-1.5 leading-none">
                     <Label htmlFor="interview-scheduling" className="cursor-pointer">
                       Enable Automated Scheduling
@@ -672,7 +1255,11 @@ export default function CreateJobPage() {
               <div className="space-y-2">
                 <Label htmlFor="interview-feedback">Interview Feedback</Label>
                 <div className="flex items-start space-x-2">
-                  <Checkbox id="interview-feedback" defaultChecked />
+                  <Checkbox 
+                    id="interview-feedback" 
+                    checked={formData.ai_feedback}
+                    onCheckedChange={(checked) => handleInputChange('ai_feedback', checked)}
+                  />
                   <div className="grid gap-1.5 leading-none">
                     <Label htmlFor="interview-feedback" className="cursor-pointer">
                       Enable AI Interview Analysis
@@ -684,24 +1271,16 @@ export default function CreateJobPage() {
                 </div>
               </div>
             </CardContent>
+            <CardFooter className="flex justify-between">
+              <Button variant="outline" onClick={prevStep} disabled={isFirstStep(currentStep)}>
+                Previous
+              </Button>
+              <Button onClick={nextStep} disabled={isSubmitting}>
+                {isSubmitting ? 'Saving...' : 'Create Job'}
+              </Button>
+            </CardFooter>
           </>
         )}
-
-        <CardFooter className="flex justify-between">
-          <Button
-            variant="outline"
-            onClick={prevStep}
-            disabled={currentStep === 0}
-            className="border-slate-200 text-slate-700 hover:bg-slate-100"
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
-          <Button onClick={nextStep} className="bg-violet-600 hover:bg-violet-700">
-            {currentStep === steps.length - 1 ? "Create Job" : "Next"}
-            {currentStep !== steps.length - 1 && <ArrowRight className="ml-2 h-4 w-4" />}
-          </Button>
-        </CardFooter>
       </Card>
     </div>
   )

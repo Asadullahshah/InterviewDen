@@ -1,15 +1,71 @@
+"use client";
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { BarChart, Briefcase, ChevronRight, FileText, Users } from "lucide-react"
 import Link from "next/link"
+import { createSupabaseBrowserClient } from "@/lib/supabase"
+import { toast } from "react-hot-toast"
 
 export default function CompanyPortal() {
+  const supabase = createSupabaseBrowserClient();
+  const [loading, setLoading] = useState(true);
+  const [companyInfo, setCompanyInfo] = useState({
+    company_name: "",
+    industry: "",
+    size: "",
+    location: "",
+    website: "",
+    description: "",
+    email: "",
+  });
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      setLoading(true);
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      console.log('Current user:', user);
+      if (userError || !user) {
+        setLoading(false);
+        return;
+      }
+      const userId = user.id;
+      // Fetch from profiles
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("email")
+        .eq("id", userId)
+        .single();
+      // Fetch from companies
+      const { data: company, error: companyError } = await supabase
+        .from("companies")
+        .select("company_name, industry, size, location, website, description")
+        .eq("id", userId)
+        .single();
+      console.log('Fetched company:', company, 'Error:', companyError);
+      setCompanyInfo({
+        company_name: company?.company_name || "",
+        industry: company?.industry || "",
+        size: company?.size || "",
+        location: company?.location || "",
+        website: company?.website || "",
+        description: company?.description || "",
+        email: profile?.email || user.email || "",
+      });
+      setLoading(false);
+    };
+    fetchProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="flex flex-col gap-6 p-6">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold">Welcome back, TechCorp!</h1>
+        <h1 className="text-3xl font-bold">
+          {loading ? "Welcome back!" : `Welcome back, ${companyInfo.company_name || "Company"}!`}
+        </h1>
         <p className="text-muted-foreground">Here's an overview of your recruitment activities.</p>
       </div>
 

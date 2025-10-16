@@ -33,8 +33,8 @@ export default function CandidateLayout({ children }: { children: ReactNode }) {
       icon: "FileText",
     },
     {
-      title: "Interviews",
-      href: "/candidate/interviews",
+      title: "Feedbacks",
+      href: "/candidate/feedback",
       icon: "Calendar",
     },
     {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { ChevronRight, Filter, Briefcase, Plus, Lightbulb, TrendingUp, CheckCircle2, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,8 +8,53 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import Link from "next/link"
+import { createSupabaseBrowserClient } from "@/lib/supabase"
 
 export default function CompanyDashboard() {
+  const supabase = createSupabaseBrowserClient();
+  const [companyInfo, setCompanyInfo] = useState({
+    company_name: "",
+    industry: "",
+    size: "",
+    location: "",
+    website: "",
+    description: "",
+    email: "",
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      setLoading(true);
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      console.log('Current user:', user);
+      if (userError || !user) {
+        setLoading(false);
+        return;
+      }
+      const userId = user.id;
+      // Fetch from companies
+      const { data: company, error: companyError } = await supabase
+        .from("companies")
+        .select("company_name, industry, size, location, website, description")
+        .eq("id", userId)
+        .single();
+      console.log('Fetched company:', company, 'Error:', companyError);
+      setCompanyInfo({
+        company_name: company?.company_name || "",
+        industry: company?.industry || "",
+        size: company?.size || "",
+        location: company?.location || "",
+        website: company?.website || "",
+        description: company?.description || "",
+        email: user.email || "",
+      });
+      setLoading(false);
+    };
+    fetchProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [searchQuery, setSearchQuery] = useState("")
 
   return (
@@ -17,7 +62,9 @@ export default function CompanyDashboard() {
       {/* Welcome Section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Welcome back, TechCorp!</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+            {loading ? "Welcome back!" : `Welcome back, ${companyInfo.company_name || "Company"}!`}
+          </h1>
           <p className="text-slate-500 dark:text-slate-400">Here's what's happening with your recruitment today.</p>
         </div>
         <div className="flex gap-2">

@@ -1,158 +1,198 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
-import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { InterviewDenLogo } from "@/components/logo"
+import { createSupabaseBrowserClient } from "@/lib/supabase"
+import { toast } from "sonner"
 
 export default function LoginPage() {
+  const supabase = createSupabaseBrowserClient()
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const type = searchParams.get("type") || "candidate"
-
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  })
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }))
+  }
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+  const handleLogin = async (userType: "candidate" | "company") => {
+    try {
+      setIsLoading(true)
+      console.log("Attempting login for:", userType)
+      
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      })
 
-    // Redirect based on user type
-    if (type === "candidate") {
-      router.push("/candidate/dashboard")
-    } else {
-      router.push("/company/dashboard")
+      if (error) {
+        console.error("Login error:", error)
+        throw error
+      }
+
+      console.log("Login successful, user data:", data)
+
+      if (data.user) {
+        // Check if user type matches
+        const currentUserType = data.user.user_metadata.user_type
+        if (currentUserType !== userType) {
+          throw new Error(`This account is registered as a ${currentUserType}, not a ${userType}`)
+        }
+
+        toast.success("Login successful!")
+        console.log("Redirecting to dashboard...")
+        setTimeout(() => {
+          window.location.href = `/${userType}/dashboard`
+        }, 500)
+      }
+    } catch (error: any) {
+      console.error("Login error:", error)
+      toast.error(error.message || "Failed to login")
+    } finally {
+      setIsLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex flex-col justify-center items-center bg-slate-50 p-4">
-      <Link href="/" className="mb-8 flex items-center gap-2">
-        <InterviewDenLogo className="w-8 h-8" />
-        <span className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
-          InterviewDen
-        </span>
-      </Link>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow-lg">
+        <div className="text-center">
+          <h2 className="text-3xl font-bold text-gray-900">Welcome back</h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Sign in to your account
+          </p>
+        </div>
 
-      <div className="w-full max-w-md">
-        <Tabs defaultValue={type} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-8">
-            <TabsTrigger
-              value="candidate"
-              onClick={() => router.push("/login?type=candidate")}
-              className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white"
-            >
-              Candidate
-            </TabsTrigger>
-            <TabsTrigger
-              value="company"
-              onClick={() => router.push("/login?type=company")}
-              className="data-[state=active]:bg-violet-600 data-[state=active]:text-white"
-            >
-              Company
-            </TabsTrigger>
+        <Tabs defaultValue="candidate" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="candidate">Candidate</TabsTrigger>
+            <TabsTrigger value="company">Company</TabsTrigger>
           </TabsList>
 
           <TabsContent value="candidate">
-            <div className="bg-white p-8 rounded-lg shadow-md border border-slate-200">
-              <h1 className="text-2xl font-bold text-slate-900 mb-6">Candidate Login</h1>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="candidate-email">Email</Label>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                handleLogin("candidate")
+              }}
+              className="mt-8 space-y-6"
+            >
+              <div className="space-y-4">
+                <div>
+                  <label
+                    htmlFor="email"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Email address
+                  </label>
                   <Input
-                    id="candidate-email"
+                    id="email"
+                    name="email"
                     type="email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
                     required
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    className="mt-1"
                   />
                 </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="candidate-password">Password</Label>
-                    <Link href="/forgot-password" className="text-sm text-indigo-600 hover:text-indigo-800">
-                      Forgot password?
-                    </Link>
-                  </div>
+
+                <div>
+                  <label
+                    htmlFor="password"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Password
+                  </label>
                   <Input
-                    id="candidate-password"
+                    id="password"
+                    name="password"
                     type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
                     required
+                    value={formData.password}
+                    onChange={handleInputChange}
+                    className="mt-1"
                   />
                 </div>
-                <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700" disabled={isLoading}>
-                  {isLoading ? "Logging in..." : "Log in"}
-                </Button>
-              </form>
-              <div className="mt-6 text-center">
-                <p className="text-sm text-slate-600">
-                  Don't have an account?{" "}
-                  <Link href="/signup?type=candidate" className="text-indigo-600 hover:text-indigo-800 font-medium">
-                    Sign up
-                  </Link>
-                </p>
               </div>
-            </div>
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isLoading}
+              >
+                {isLoading ? "Signing in..." : "Sign in as Candidate"}
+              </Button>
+            </form>
           </TabsContent>
 
           <TabsContent value="company">
-            <div className="bg-white p-8 rounded-lg shadow-md border border-slate-200">
-              <h1 className="text-2xl font-bold text-slate-900 mb-6">Company Login</h1>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="company-email">Email</Label>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                handleLogin("company")
+              }}
+              className="mt-8 space-y-6"
+            >
+              <div className="space-y-4">
+                <div>
+                  <label
+                    htmlFor="company-email"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Email address
+                  </label>
                   <Input
                     id="company-email"
+                    name="email"
                     type="email"
-                    placeholder="company@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
                     required
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    className="mt-1"
                   />
                 </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="company-password">Password</Label>
-                    <Link href="/forgot-password" className="text-sm text-violet-600 hover:text-violet-800">
-                      Forgot password?
-                    </Link>
-                  </div>
+
+                <div>
+                  <label
+                    htmlFor="company-password"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Password
+                  </label>
                   <Input
                     id="company-password"
+                    name="password"
                     type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
                     required
+                    value={formData.password}
+                    onChange={handleInputChange}
+                    className="mt-1"
                   />
                 </div>
-                <Button type="submit" className="w-full bg-violet-600 hover:bg-violet-700" disabled={isLoading}>
-                  {isLoading ? "Logging in..." : "Log in"}
-                </Button>
-              </form>
-              <div className="mt-6 text-center">
-                <p className="text-sm text-slate-600">
-                  Don't have an account?{" "}
-                  <Link href="/signup?type=company" className="text-violet-600 hover:text-violet-800 font-medium">
-                    Sign up
-                  </Link>
-                </p>
               </div>
-            </div>
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isLoading}
+              >
+                {isLoading ? "Signing in..." : "Sign in as Company"}
+              </Button>
+            </form>
           </TabsContent>
         </Tabs>
       </div>
