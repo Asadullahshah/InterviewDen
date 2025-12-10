@@ -7,7 +7,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { BarChart, Briefcase, ChevronRight, FileText, Users } from "lucide-react"
 import Link from "next/link"
 import { createSupabaseBrowserClient } from "@/lib/supabase"
-import { toast } from "react-hot-toast"
 
 export default function CompanyPortal() {
   const supabase = createSupabaseBrowserClient();
@@ -21,30 +20,49 @@ export default function CompanyPortal() {
     description: "",
     email: "",
   });
+  const [jobStats, setJobStats] = useState({
+    activeJobs: 0,
+    draftJobs: 0,
+    totalJobs: 0,
+  });
+  const [recentJobs, setRecentJobs] = useState<any[]>([]);
 
   useEffect(() => {
-    const fetchProfile = async () => {
+    const fetchData = async () => {
       setLoading(true);
       const { data: { user }, error: userError } = await supabase.auth.getUser();
-      console.log('Current user:', user);
+      
       if (userError || !user) {
         setLoading(false);
         return;
       }
+      
       const userId = user.id;
+      
       // Fetch from profiles
       const { data: profile } = await supabase
         .from("profiles")
         .select("email")
         .eq("id", userId)
         .single();
+      
       // Fetch from companies
-      const { data: company, error: companyError } = await supabase
+      const { data: company } = await supabase
         .from("companies")
         .select("company_name, industry, size, location, website, description")
         .eq("id", userId)
         .single();
-      console.log('Fetched company:', company, 'Error:', companyError);
+      
+      // Fetch jobs statistics
+      const { data: jobs } = await supabase
+        .from("jobs")
+        .select("id, title, status, created_at, description")
+        .eq("company_id", userId)
+        .order("created_at", { ascending: false });
+
+      const activeJobs = jobs?.filter(job => job.status === 'active' || job.status === 'published').length || 0;
+      const draftJobs = jobs?.filter(job => job.status === 'draft').length || 0;
+      
       setCompanyInfo({
         company_name: company?.company_name || "",
         industry: company?.industry || "",
@@ -54,10 +72,19 @@ export default function CompanyPortal() {
         description: company?.description || "",
         email: profile?.email || user.email || "",
       });
+
+      setJobStats({
+        activeJobs,
+        draftJobs,
+        totalJobs: jobs?.length || 0,
+      });
+
+      setRecentJobs(jobs?.slice(0, 5) || []);
+      
       setLoading(false);
     };
-    fetchProfile();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
+    fetchData();
   }, []);
 
   return (
@@ -76,8 +103,18 @@ export default function CompanyPortal() {
             <Briefcase className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">8</div>
-            <p className="text-xs text-muted-foreground">+2 this month</p>
+            <div className="text-2xl font-bold">{loading ? "..." : jobStats.activeJobs}</div>
+            <p className="text-xs text-muted-foreground">{jobStats.draftJobs} draft{jobStats.draftJobs !== 1 ? 's' : ''}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Total Jobs</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{loading ? "..." : jobStats.totalJobs}</div>
+            <p className="text-xs text-muted-foreground">All job postings</p>
           </CardContent>
         </Card>
         <Card>
@@ -86,31 +123,18 @@ export default function CompanyPortal() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">142</div>
-            <p className="text-xs text-muted-foreground">+28 this week</p>
+            <div className="text-2xl font-bold">0</div>
+            <p className="text-xs text-muted-foreground">Coming soon</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Interviews Scheduled</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">12</div>
-            <p className="text-xs text-muted-foreground">4 this week</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Hiring Rate</CardTitle>
             <BarChart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="text-2xl font-bold">24%</div>
-            </div>
-            <Progress value={24} className="mt-2" />
-            <p className="mt-2 text-xs text-muted-foreground">+2% from last month</p>
+            <div className="text-2xl font-bold">0</div>
+            <p className="text-xs text-muted-foreground">Coming soon</p>
           </CardContent>
         </Card>
       </div>
@@ -118,9 +142,9 @@ export default function CompanyPortal() {
       <Tabs defaultValue="recent">
         <div className="flex items-center justify-between">
           <TabsList>
-            <TabsTrigger value="recent">Recent Applications</TabsTrigger>
-            <TabsTrigger value="shortlisted">Shortlisted</TabsTrigger>
-            <TabsTrigger value="interviews">Interviews</TabsTrigger>
+            <TabsTrigger value="recent">Recent Jobs</TabsTrigger>
+            <TabsTrigger value="shortlisted">Applicants (Coming Soon)</TabsTrigger>
+            <TabsTrigger value="interviews">Interviews (Coming Soon)</TabsTrigger>
           </TabsList>
           <Button variant="outline" size="sm" asChild>
             <Link href="/company/jobs">
@@ -130,68 +154,50 @@ export default function CompanyPortal() {
           </Button>
         </div>
         <TabsContent value="recent" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Software Engineer</CardTitle>
-              <CardDescription>12 new applications</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h4 className="font-medium">Alex Johnson</h4>
-                  <p className="text-sm text-muted-foreground">5 years experience, React, Node.js</p>
-                  <div className="mt-1 text-xs text-muted-foreground">Applied 2 days ago</div>
+          {loading ? (
+            <Card>
+              <CardContent className="p-6">
+                <p className="text-center text-muted-foreground">Loading...</p>
+              </CardContent>
+            </Card>
+          ) : recentJobs.length > 0 ? (
+            recentJobs.map((job) => (
+              <Card key={job.id}>
+                <CardHeader>
+                  <CardTitle>{job.title}</CardTitle>
+                  <CardDescription>
+                    Status: {job.status?.charAt(0).toUpperCase() + job.status?.slice(1) || 'Draft'} • 
+                    Posted {new Date(job.created_at).toLocaleDateString()}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground line-clamp-2">
+                    {job.description || "No description available"}
+                  </p>
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    0 applications • 0 shortlisted
+                  </div>
+                </CardContent>
+                <CardFooter className="flex gap-2">
+                  <Button size="sm" variant="outline" asChild>
+                    <Link href={`/company/jobs/${job.id}`}>View Job</Link>
+                  </Button>
+                  <Button size="sm" disabled>View Applicants</Button>
+                </CardFooter>
+              </Card>
+            ))
+          ) : (
+            <Card>
+              <CardContent className="p-6">
+                <p className="text-center text-muted-foreground">No jobs posted yet</p>
+                <div className="mt-4 flex justify-center">
+                  <Button asChild>
+                    <Link href="/company/jobs/create">Create Your First Job</Link>
+                  </Button>
                 </div>
-                <Button size="sm">Review</Button>
-              </div>
-              <div className="flex items-start justify-between">
-                <div>
-                  <h4 className="font-medium">Sarah Williams</h4>
-                  <p className="text-sm text-muted-foreground">3 years experience, Angular, Python</p>
-                  <div className="mt-1 text-xs text-muted-foreground">Applied 3 days ago</div>
-                </div>
-                <Button size="sm">Review</Button>
-              </div>
-              <div className="flex items-start justify-between">
-                <div>
-                  <h4 className="font-medium">Michael Brown</h4>
-                  <p className="text-sm text-muted-foreground">7 years experience, Vue.js, Java</p>
-                  <div className="mt-1 text-xs text-muted-foreground">Applied 1 day ago</div>
-                </div>
-                <Button size="sm">Review</Button>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button variant="outline" className="w-full">View All Applicants</Button>
-            </CardFooter>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Frontend Developer</CardTitle>
-              <CardDescription>8 new applications</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h4 className="font-medium">Emily Davis</h4>
-                  <p className="text-sm text-muted-foreground">4 years experience, React, CSS</p>
-                  <div className="mt-1 text-xs text-muted-foreground">Applied 1 day ago</div>
-                </div>
-                <Button size="sm">Review</Button>
-              </div>
-              <div className="flex items-start justify-between">
-                <div>
-                  <h4 className="font-medium">David Wilson</h4>
-                  <p className="text-sm text-muted-foreground">2 years experience, Vue.js, SCSS</p>
-                  <div className="mt-1 text-xs text-muted-foreground">Applied 2 days ago</div>
-                </div>
-                <Button size="sm">Review</Button>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button variant="outline" className="w-full">View All Applicants</Button>
-            </CardFooter>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
         <TabsContent value="shortlisted" className="space-y-4">
           <Card>
@@ -264,42 +270,29 @@ export default function CompanyPortal() {
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Job Performance</CardTitle>
-            <CardDescription>Last 30 days</CardDescription>
+            <CardTitle>Recent Job Postings</CardTitle>
+            <CardDescription>Your latest jobs</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-sm">Software Engineer</span>
-                <span className="text-sm font-medium">86 applicants</span>
-              </div>
-              <Progress value={86} className="h-2" />
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-sm">Frontend Developer</span>
-                <span className="text-sm font-medium">42 applicants</span>
-              </div>
-              <Progress value={42} className="h-2" />
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-sm">UX Designer</span>
-                <span className="text-sm font-medium">28 applicants</span>
-              </div>
-              <Progress value={28} className="h-2" />
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-sm">Product Manager</span>
-                <span className="text-sm font-medium">14 applicants</span>
-              </div>
-              <Progress value={14} className="h-2" />
-            </div>
+            {loading ? (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : recentJobs.length > 0 ? (
+              recentJobs.slice(0, 4).map((job, index) => (
+                <div key={job.id} className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium truncate">{job.title}</span>
+                    <span className="text-sm text-muted-foreground capitalize">{job.status || 'draft'}</span>
+                  </div>
+                  <Progress value={job.status === 'active' || job.status === 'published' ? 100 : 50} className="h-2" />
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">No jobs created yet</p>
+            )}
           </CardContent>
           <CardFooter>
             <Button variant="outline" className="w-full" asChild>
-              <Link href="/company/analytics">View Analytics</Link>
+              <Link href="/company/jobs">View All Jobs</Link>
             </Button>
           </CardFooter>
         </Card>
@@ -309,29 +302,35 @@ export default function CompanyPortal() {
             <CardDescription>Latest updates on your jobs</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="border-l-2 border-blue-500 pl-4">
-              <h4 className="font-medium">New Application</h4>
-              <p className="text-sm text-muted-foreground">Michael Brown applied for Software Engineer</p>
-              <div className="mt-1 text-xs text-muted-foreground">1 hour ago</div>
-            </div>
-            <div className="border-l-2 border-green-500 pl-4">
-              <h4 className="font-medium">Interview Scheduled</h4>
-              <p className="text-sm text-muted-foreground">Alex Johnson for Software Engineer</p>
-              <div className="mt-1 text-xs text-muted-foreground">3 hours ago</div>
-            </div>
-            <div className="border-l-2 border-purple-500 pl-4">
-              <h4 className="font-medium">Test Completed</h4>
-              <p className="text-sm text-muted-foreground">Emily Davis completed Frontend Developer assessment</p>
-              <div className="mt-1 text-xs text-muted-foreground">Yesterday</div>
-            </div>
-            <div className="border-l-2 border-yellow-500 pl-4">
-              <h4 className="font-medium">Job Posted</h4>
-              <p className="text-sm text-muted-foreground">UX Designer position published</p>
-              <div className="mt-1 text-xs text-muted-foreground">2 days ago</div>
-            </div>
+            {loading ? (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : recentJobs.length > 0 ? (
+              recentJobs.slice(0, 4).map((job, index) => {
+                const colors = ['blue-500', 'green-500', 'purple-500', 'yellow-500'];
+                const color = colors[index % colors.length];
+                const statusText = job.status === 'active' || job.status === 'published' ? 'Published' : 'Created as Draft';
+                
+                return (
+                  <div key={job.id} className={`border-l-2 border-${color} pl-4`}>
+                    <h4 className="font-medium">Job {statusText}</h4>
+                    <p className="text-sm text-muted-foreground">{job.title}</p>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {new Date(job.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="border-l-2 border-gray-300 pl-4">
+                <h4 className="font-medium">No Activities Yet</h4>
+                <p className="text-sm text-muted-foreground">Create your first job to see activities here</p>
+              </div>
+            )}
           </CardContent>
           <CardFooter>
-            <Button variant="outline" className="w-full">View All Activities</Button>
+            <Button variant="outline" className="w-full" asChild>
+              <Link href="/company/jobs">Manage Jobs</Link>
+            </Button>
           </CardFooter>
         </Card>
       </div>

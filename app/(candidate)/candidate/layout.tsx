@@ -43,17 +43,13 @@ export default function CandidateLayout({ children }: { children: ReactNode }) {
       icon: "User",
     },
     {
-      title: "Help Center",
-      href: "/candidate/help",
-      icon: "HelpCircle",
-    },
-    {
       title: "Logout",
       href: "/login",
       icon: "LogOut",
       className: "text-red-500 hover:text-red-600",
     }
   ];
+
 
   return (
     <div className="flex min-h-screen bg-background">

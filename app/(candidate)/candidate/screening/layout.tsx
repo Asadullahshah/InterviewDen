@@ -1,18 +1,18 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { useScreening } from "@/app/context/screening-context";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { CheckCircle2, Circle } from "lucide-react";
 
-type ScreeningStep = "resume" | "quiz" | "technical" | "video";
+type ScreeningStep = "resume" | "quiz" | "interview";
 
 const steps: { id: ScreeningStep; label: string }[] = [
   { id: "resume", label: "Resume Screening" },
-  { id: "quiz", label: "Quiz" },
-  { id: "technical", label: "Technical Assessment" },
-  { id: "video", label: "Video Interview" },
+  { id: "quiz", label: "Quiz Assessment" },
+  { id: "interview", label: "AI Interview" },
 ];
 
 export default function ScreeningLayout({
@@ -23,6 +23,11 @@ export default function ScreeningLayout({
   const searchParams = useSearchParams();
   const jobId = searchParams?.get("jobId");
   const { getProgress } = useScreening();
+  const [mounted, setMounted] = useState(false);
+  
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   
   if (!jobId) {
     return (
@@ -35,7 +40,7 @@ export default function ScreeningLayout({
     );
   }
 
-  const progress = getProgress(jobId);
+  const progress = mounted ? getProgress(jobId) : undefined;
   const currentStepIndex = progress ? steps.findIndex(step => step.id === progress.currentStep) : 0;
   const completedSteps = progress ? Object.entries(progress.progress).filter(([_, value]) => value?.completed).length : 0;
   const totalSteps = steps.length;
@@ -63,7 +68,7 @@ export default function ScreeningLayout({
           </div>
           <Progress value={progressPercentage} className="h-2" />
           
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             {steps.map((step, index) => {
               const isCompleted = progress?.progress[step.id]?.completed;
               const isCurrent = index === currentStepIndex;

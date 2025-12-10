@@ -109,32 +109,8 @@ export function Sidebar({
       </div>
       <div className="p-4 mt-auto">
         {children}
-        <div className={cn("rounded-lg p-4 text-white", aiBoxBgColor)}>
-          <h3 className="font-medium flex items-center gap-2 mb-2">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-4 w-4"
-            >
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-            </svg>
-            {aiAssistantTitle}
-          </h3>
-          <p className={cn("text-xs mb-3", aiBoxTextColor)}>
-            {userType === "candidate"
-              ? "Get personalized career advice and interview tips"
-              : "Get AI-powered insights and candidate recommendations"}
-          </p>
-          <Button size="sm" className={cn("w-full bg-white hover:bg-slate-100", aiButtonBgColor, aiButtonHoverColor)}>
-            Ask AI
-          </Button>
-        </div>
       </div>
+
     </div>
   )
 }

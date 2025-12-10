@@ -38,51 +38,104 @@ export default function SignupPage() {
     try {
       setIsLoading(true)
 
-      if (formData.password !== formData.confirmPassword) {
-        throw new Error("Passwords do not match")
+      // Validation
+      if (!formData.email || !formData.password) {
+        toast.error("Email and password are required")
+        return
       }
 
+      if (formData.password.length < 6) {
+        toast.error("Password must be at least 6 characters long")
+        return
+      }
+
+      if (formData.password !== formData.confirmPassword) {
+        toast.error("Passwords do not match")
+        return
+      }
+
+      if (userType === "company" && !formData.companyName) {
+        toast.error("Company name is required")
+        return
+      }
+
+      if (userType === "candidate" && !formData.name) {
+        toast.error("Name is required")
+        return
+      }
+
+      console.log("Attempting signup with:", { email: formData.email, userType })
+
       const { data, error } = await supabase.auth.signUp({
-        email: formData.email,
+        email: formData.email.trim().toLowerCase(),
         password: formData.password,
         options: {
           data: {
             user_type: userType,
-            name: formData.name,
+            name: userType === "company" ? formData.companyName : formData.name,
           },
         },
       })
 
       if (error) {
+        console.error("Signup error:", error)
         throw error
       }
 
+      console.log("Signup response:", data)
+
       if (data.user) {
+        console.log("User created, creating profile...")
+        
         // Insert into profiles
         const { error: profileError } = await supabase.from("profiles").insert({
           id: data.user.id,
-          email: formData.email,
+          email: formData.email.trim().toLowerCase(),
           name: userType === "company" ? formData.companyName : formData.name,
           user_type: userType,
         })
-        if (profileError) throw profileError
+        
+        if (profileError) {
+          console.error("Profile creation error:", profileError)
+          throw new Error(`Failed to create profile: ${profileError.message}`)
+        }
 
-        // Insert into companies if company
+        // Insert into role-specific table
         if (userType === "company") {
+          console.log("Creating company record...")
           const { error: companyError } = await supabase.from("companies").insert({
             id: data.user.id,
             company_name: formData.companyName,
-            industry: formData.industry,
-            size: formData.size,
-            website: formData.website,
-            location: formData.location,
-            description: formData.description,
+            industry: formData.industry || null,
+            size: formData.size || null,
+            website: formData.website || null,
+            location: formData.location || null,
+            description: formData.description || null,
           })
-          if (companyError) throw companyError
+          
+          if (companyError) {
+            console.error("Company creation error:", companyError)
+            throw new Error(`Failed to create company: ${companyError.message}`)
+          }
+        } else {
+          console.log("Creating candidate record...")
+          const { error: candidateError } = await supabase.from("candidates").insert({
+            id: data.user.id,
+            resumes: [],
+            skills: [],
+            experience: null,
+          })
+          
+          if (candidateError) {
+            console.error("Candidate creation error:", candidateError)
+            throw new Error(`Failed to create candidate profile: ${candidateError.message}`)
+          }
         }
 
-        toast.success("Signup successful! Please check your email for verification.")
+        toast.success("Signup successful! You can now login.")
         router.push("/login")
+      } else {
+        throw new Error("Signup failed - no user data returned")
       }
     } catch (error: any) {
       toast.error(error.message || "Failed to sign up")
@@ -166,10 +219,14 @@ export default function SignupPage() {
                     type="password"
                     autoComplete="new-password"
                     required
+                    minLength={6}
                     value={formData.password}
                     onChange={handleInputChange}
                     className="mt-1"
                   />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Minimum 6 characters
+                  </p>
                 </div>
 
                 <div>
@@ -228,7 +285,8 @@ export default function SignupPage() {
                 </div>
                 <div>
                   <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
-                  <Input id="password" name="password" type="password" autoComplete="new-password" required value={formData.password} onChange={handleInputChange} className="mt-1" />
+                  <Input id="password" name="password" type="password" autoComplete="new-password" required minLength={6} value={formData.password} onChange={handleInputChange} className="mt-1" />
+                  <p className="mt-1 text-xs text-gray-500">Minimum 6 characters</p>
                 </div>
                 <div>
                   <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">Confirm Password</label>

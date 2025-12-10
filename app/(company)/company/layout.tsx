@@ -36,29 +36,14 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
       icon: "Briefcase",
     },
     {
-      title: "Tests",
-      href: "/company/tests",
-      icon: "FileText",
-    },
-    {
       title: "Analytics",
       href: "/company/analytics",
       icon: "BarChart",
     },
     {
-      title: "Settings",
-      href: "/company/settings",
-      icon: "Settings",
-    },
-    {
       title: "Profile",
       href: "/company/profile",
       icon: "User",
-    },
-    {
-      title: "Help Center",
-      href: "/company/help",
-      icon: "HelpCircle",
     },
     {
       title: "Logout",
@@ -67,6 +52,7 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
       className: "text-red-500 hover:text-red-600",
     }
   ];
+
 
   return (
     <div className="flex min-h-screen bg-background">

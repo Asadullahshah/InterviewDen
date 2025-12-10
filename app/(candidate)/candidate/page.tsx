@@ -1,37 +1,107 @@
+"use client";
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CalendarDays, ChevronRight, FileText, GraduationCap, Briefcase, Clock, User, Mail, Phone, MapPin } from "lucide-react"
 import Link from "next/link"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar } from "@/components/ui/avatar"
+import { createSupabaseBrowserClient } from "@/lib/supabase"
 
 export default function CandidatePortal() {
+  const supabase = createSupabaseBrowserClient();
+  const [loading, setLoading] = useState(true);
+  const [profileData, setProfileData] = useState({
+    name: "",
+    email: "",
+    avatar_url: "",
+    experience: "",
+    skills: [] as string[],
+    resume_url: "",
+  });
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      setLoading(true);
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        setLoading(false);
+        return;
+      }
+
+      const userId = user.id;
+
+      // Fetch from profiles
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("name, email, avatar_url")
+        .eq("id", userId)
+        .single();
+
+      // Fetch from candidates
+      const { data: candidate } = await supabase
+        .from("candidates")
+        .select("experience, skills, resume_url")
+        .eq("id", userId)
+        .single();
+
+      setProfileData({
+        name: profile?.name || "",
+        email: profile?.email || user.email || "",
+        avatar_url: profile?.avatar_url || "",
+        experience: candidate?.experience || "Not specified",
+        skills: candidate?.skills || [],
+        resume_url: candidate?.resume_url || "",
+      });
+
+      setLoading(false);
+    };
+
+    fetchProfile();
+  }, []);
+
+  // Get user initials for avatar fallback
+  const getInitials = (name: string) => {
+    if (!name) return "CD";
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const firstName = profileData.name.split(" ")[0] || "Candidate";
+
   return (
     <div className="flex flex-col gap-6 p-6">
       {/* Profile Section */}
       <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-0 shadow-sm">
         <CardContent className="flex items-center gap-6 p-6">
-          <Avatar className="h-20 w-20">
-            <AvatarImage src="/avatars/01.png" />
-            <AvatarFallback>JD</AvatarFallback>
-          </Avatar>
+          <Avatar 
+            src={profileData.avatar_url || "/avatars/default.png"}
+            alt={profileData.name || "User avatar"}
+            size="lg"
+            className="h-20 w-20"
+          />
           <div className="flex-1">
-            <h2 className="text-2xl font-semibold text-gray-900">John Doe</h2>
-            <p className="text-gray-600">Senior Software Engineer</p>
+            <h2 className="text-2xl font-semibold text-gray-900">
+              {loading ? "Loading..." : profileData.name || "Candidate"}
+            </h2>
+            <p className="text-gray-600">{profileData.experience}</p>
             <div className="mt-2 flex flex-wrap gap-4 text-sm text-gray-500">
               <div className="flex items-center gap-1">
                 <Mail className="h-4 w-4" />
-                <span>john.doe@example.com</span>
+                <span>{profileData.email || "Not provided"}</span>
               </div>
-              <div className="flex items-center gap-1">
-                <Phone className="h-4 w-4" />
-                <span>+1 (555) 123-4567</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <MapPin className="h-4 w-4" />
-                <span>San Francisco, CA</span>
-              </div>
+              {profileData.skills.length > 0 && (
+                <div className="flex items-center gap-1">
+                  <Briefcase className="h-4 w-4" />
+                  <span>{profileData.skills.slice(0, 3).join(", ")}</span>
+                </div>
+              )}
             </div>
           </div>
           <Button variant="outline" className="bg-white hover:bg-gray-50" asChild>
@@ -43,7 +113,9 @@ export default function CandidatePortal() {
       </Card>
 
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold text-gray-900">Welcome back, John!</h1>
+        <h1 className="text-3xl font-bold text-gray-900">
+          Welcome back, {loading ? "..." : firstName}!
+        </h1>
         <p className="text-gray-600">Here's what's happening with your job applications.</p>
       </div>
 

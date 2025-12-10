@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
-export type ScreeningStep = "resume" | "quiz" | "technical" | "video";
+export type ScreeningStep = "resume" | "quiz" | "interview";
 
 export interface ScreeningProgress {
   jobId: string;
@@ -17,6 +17,7 @@ export interface ScreeningProgress {
       answers: string[];
       timeLeft: number;
       completed: boolean;
+      score?: number;
     };
     technical: {
       currentProblem: number;
@@ -25,10 +26,12 @@ export interface ScreeningProgress {
       testResults: any[];
       completed: boolean;
     };
-    video: {
-      recordings: any[];
+    interview: {
+      session_id: string | null;
+      transcript: any[];
       timeLeft: number;
       completed: boolean;
+      evaluation: any | null;
     };
   };
   lastUpdated: number;
@@ -68,7 +71,7 @@ export function ScreeningProvider({ children }: { children: ReactNode }) {
           resume: { answers: [], timeLeft: 30 * 60, completed: false },
           quiz: { answers: [], timeLeft: 20 * 60, completed: false },
           technical: { currentProblem: 0, code: "", timeLeft: 30 * 60, testResults: [], completed: false },
-          video: { recordings: [], timeLeft: 10 * 60, completed: false },
+          interview: { session_id: null, transcript: [], timeLeft: 30 * 60, completed: false, evaluation: null },
         },
         lastUpdated: Date.now(),
       };

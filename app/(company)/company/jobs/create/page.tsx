@@ -16,7 +16,6 @@ import { toast } from "sonner"
 
 const steps = [
   { id: "job-details", name: "Job Details" },
-  { id: "job-description", name: "Job Description" },
   { id: "resume-requirements", name: "Resume Requirements" },
   { id: "test-requirements", name: "Test Requirements" },
   { id: "interview-settings", name: "Interview Settings" },
@@ -36,14 +35,13 @@ interface JobFormData {
   currency: string
   is_remote: boolean
   has_relocation: boolean
-  has_sponsorship: boolean
-  
+
   // Step 2 fields
   overview: string
   responsibilities: string[]
   detailed_requirements: string[]
   detailed_benefits: string[]
-  
+
   // Step 3 fields
   required_documents: {
     resume: boolean
@@ -57,7 +55,7 @@ interface JobFormData {
   }>
   min_education: string
   ai_screening_enabled: boolean
-  
+
   // Step 4 fields
   test_requirements: {
     technical_test: boolean
@@ -72,9 +70,10 @@ interface JobFormData {
     custom_questions: string
     weightage: number
     passing_score: number
+    num_questions: number
   }
   ai_test_generation: boolean
-  
+
   // Step 5 fields
   interview_stages: {
     ai_screening: boolean
@@ -89,29 +88,18 @@ interface JobFormData {
   }
   automated_scheduling: boolean
   ai_feedback: boolean
-  
+
   // Common fields
   status: 'draft' | 'published'
   step: number
-  
-  // Stage weightages
+
+  // Stage weightages (adjusted - no separate coding test)
   stage_weightages: {
     resume_screening: number
-    technical_quiz: number
-    coding_test: number
+    quiz: number
     interview: number
   }
-  
-  // Coding test specific fields
-  coding_test_config: {
-    difficulty: string
-    duration: string
-    languages: string[]
-    custom_questions: string
-    weightage: number
-    passing_score: number
-  }
-  
+
   // Interview specific fields
   interview_config: {
     format: 'video' | 'audio' | 'text'
@@ -126,8 +114,9 @@ const isFirstStep = (step: number): step is 0 => step === 0
 
 export default function CreateJobPage() {
   const router = useRouter()
-  const [currentStep, setCurrentStep] = useState<0 | 1 | 2 | 3 | 4>(0)
+  const [currentStep, setCurrentStep] = useState<0 | 1 | 2 | 3>(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [draftJobId, setDraftJobId] = useState<string | null>(null)
   const [formData, setFormData] = useState<JobFormData>({
     // Step 1 fields
     title: '',
@@ -139,17 +128,16 @@ export default function CreateJobPage() {
     benefits: [],
     salary_min: null,
     salary_max: null,
-    currency: 'USD',
+    currency: 'PKR',
     is_remote: false,
     has_relocation: false,
-    has_sponsorship: false,
-    
+
     // Step 2 fields
     overview: '',
     responsibilities: [],
     detailed_requirements: [],
     detailed_benefits: [],
-    
+
     // Step 3 fields
     required_documents: {
       resume: true,
@@ -160,7 +148,7 @@ export default function CreateJobPage() {
     required_skills: [],
     min_education: 'none',
     ai_screening_enabled: true,
-    
+
     // Step 4 fields
     test_requirements: {
       technical_test: true,
@@ -171,13 +159,14 @@ export default function CreateJobPage() {
     technical_test_config: {
       difficulty: 'medium',
       duration: '60',
-      topics: ['frontend'],
+      topics: [],
       custom_questions: '',
       weightage: 30,
-      passing_score: 70
+      passing_score: 70,
+      num_questions: 15
     },
     ai_test_generation: true,
-    
+
     // Step 5 fields
     interview_stages: {
       ai_screening: true,
@@ -192,35 +181,24 @@ export default function CreateJobPage() {
     },
     automated_scheduling: true,
     ai_feedback: true,
-    
+
     // Common fields
     status: 'draft',
     step: 1,
-    
-    // Initialize stage weightages
+
+    // Initialize stage weightages (no coding test - only quiz)
     stage_weightages: {
-      resume_screening: 20,
-      technical_quiz: 30,
-      coding_test: 30,
-      interview: 20
+      resume_screening: 30,
+      quiz: 40,
+      interview: 30
     },
-    
-    // Initialize coding test config
-    coding_test_config: {
-      difficulty: 'medium',
-      duration: '90',
-      languages: ['javascript', 'python'],
-      custom_questions: '',
-      weightage: 30,
-      passing_score: 70
-    },
-    
+
     // Initialize interview config
     interview_config: {
       format: 'video',
       duration: '45',
       custom_questions: '',
-      weightage: 20,
+      weightage: 30,
       passing_score: 70
     }
   })
@@ -234,55 +212,292 @@ export default function CreateJobPage() {
     }))
   }
 
+  // Calculate total weightages
+  const getTotalWeightage = () => {
+    const { resume_screening, quiz, interview } = formData.stage_weightages
+    return resume_screening + quiz + interview
+  }
+
+  const isWeightageValid = () => {
+    const total = getTotalWeightage()
+    return total === 100
+  }
+
   const saveDraft = async () => {
     try {
       setIsSubmitting(true)
       const { data: { user } } = await supabase.auth.getUser()
-      
+
       if (!user) {
         toast.error('You must be logged in to create a job')
         return
       }
 
-      // Get company_id from profiles table using user id
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('company_id')
+      // Check if company record exists
+      const { data: company, error: companyCheckError } = await supabase
+        .from('companies')
+        .select('id')
         .eq('id', user.id)
         .single()
 
-      if (!profile?.company_id) {
-        toast.error('Company profile not found')
-        return
-      }
-
-      const { error } = await supabase
-        .from('jobs')
-        .insert({
-          ...formData,
-          company_id: profile.company_id,
-          step: currentStep + 1
+      if (companyCheckError || !company) {
+        console.error('Company record check error:', {
+          error: companyCheckError,
+          code: companyCheckError?.code,
+          message: companyCheckError?.message,
+          details: companyCheckError?.details,
+          userId: user.id,
+          companyExists: !!company
         })
 
-      if (error) throw error
+        // If no company record exists (PGRST116 = no rows), create one automatically
+        if (companyCheckError?.code === 'PGRST116') {
+          console.log('No company record found. Creating one automatically...')
+          const { error: createError } = await supabase
+            .from('companies')
+            .insert({
+              id: user.id,
+              company_name: 'My Company', // Default name, user can update in profile
+              location: null,
+              industry: null,
+              size: null,
+              website: null,
+              description: null
+            })
 
-      toast.success('Draft saved successfully')
-    } catch (error) {
-      console.error('Error saving draft:', error)
-      toast.error('Failed to save draft')
+          if (createError) {
+            console.error('Failed to create company record:', {
+              error: createError,
+              message: createError.message,
+              details: createError.details,
+              code: createError.code
+            })
+            toast.error(`Failed to create company profile: ${createError.message}`)
+            return
+          }
+
+          toast.success('Company profile created! Continuing with job creation...')
+          // Continue with job creation - no return
+        } else {
+          toast.error('Error checking company profile. Please try again.')
+          return
+        }
+      }
+
+      // Map form data to database schema
+      const jobData = {
+        company_id: user.id,
+        title: formData.title,
+        description: formData.description,
+        location: formData.location,
+        type: formData.type,
+        requirements: formData.requirements,
+        benefits: formData.benefits,
+        salary_min: formData.salary_min,
+        salary_max: formData.salary_max,
+        currency: formData.currency,
+        status: 'draft',
+        step: currentStep + 1,
+        // Store all additional config in custom_fields JSONB column
+        custom_fields: {
+          department: formData.department,
+          is_remote: formData.is_remote,
+          has_relocation: formData.has_relocation,
+          overview: formData.overview,
+          responsibilities: formData.responsibilities,
+          detailed_requirements: formData.detailed_requirements,
+          detailed_benefits: formData.detailed_benefits,
+          required_documents: formData.required_documents,
+          required_skills: formData.required_skills,
+          min_education: formData.min_education,
+          ai_screening_enabled: formData.ai_screening_enabled,
+          test_requirements: formData.test_requirements,
+          quiz_config: formData.technical_test_config, // Quiz configuration
+          ai_test_generation: formData.ai_test_generation,
+          automated_scheduling: formData.automated_scheduling,
+          ai_feedback: formData.ai_feedback,
+          stage_weightages: formData.stage_weightages,
+          interview_config: formData.interview_config
+        },
+        // Store interview stages and config
+        stages: {
+          interview_stages: formData.interview_stages,
+          ai_interview_config: formData.ai_interview_config
+        }
+      }
+
+      // If we have an existing draft, update it; otherwise create a new one
+      if (draftJobId) {
+        const { error } = await supabase
+          .from('jobs')
+          .update(jobData)
+          .eq('id', draftJobId)
+
+        if (error) {
+          console.error('Supabase update error:', {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code
+          })
+          throw new Error(error.message || 'Failed to update draft')
+        }
+
+        toast.success('Draft updated successfully')
+      } else {
+        const { data: insertedJob, error } = await supabase
+          .from('jobs')
+          .insert(jobData)
+          .select()
+          .single()
+
+        if (error) {
+          console.error('Supabase insert error:', {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code
+          })
+          throw new Error(error.message || 'Failed to save draft')
+        }
+
+        // Store the draft ID so subsequent saves update the same record
+        if (insertedJob) {
+          setDraftJobId(insertedJob.id)
+        }
+
+        toast.success('Draft saved successfully')
+      }
+    } catch (error: any) {
+      console.error('Error saving draft:', {
+        message: error.message,
+        stack: error.stack,
+        error: error
+      })
+      toast.error(error.message || 'Failed to save draft')
     } finally {
       setIsSubmitting(false)
     }
   }
 
   const nextStep = async () => {
-    if (currentStep < 4) {
-      // Save current step as draft
-      await saveDraft()
-      setCurrentStep((currentStep + 1) as 0 | 1 | 2 | 3 | 4)
+    if (currentStep < 3) {
+      // Just move to next step without saving draft
+      setCurrentStep((currentStep + 1) as 0 | 1 | 2 | 3)
     } else {
       // Submit the final form
       await submitJob()
+    }
+  }
+
+  const generateQuizForJob = async (jobId: string, jobData: any) => {
+    try {
+      // Map difficulty to experience level
+      const difficultyToLevel: { [key: string]: string } = {
+        'easy': 'Entry Level',
+        'medium': 'Mid Level',
+        'hard': 'Senior',
+        'expert': 'Lead/Architect'
+      }
+
+      // Extract technical and soft skills from requirements
+      const allRequirements = [
+        ...jobData.requirements,
+        ...(jobData.detailed_requirements || [])
+      ]
+
+      // Prepare job JSON for API
+      const apiJobData = {
+        job_title: jobData.title,
+        role_description: jobData.overview || jobData.description,
+        experience_required: {
+          years_of_experience: "Not specified", // Can be enhanced later
+          level: difficultyToLevel[jobData.quiz_config.difficulty] || 'Mid Level'
+        },
+        skills_required: {
+          technical_skills: jobData.quiz_config.topics.map((topic: string) =>
+            topic.split('-').map((word: string) =>
+              word.charAt(0).toUpperCase() + word.slice(1)
+            ).join(' ')
+          ),
+          soft_skills: allRequirements.filter((req: string) =>
+            req.toLowerCase().includes('communication') ||
+            req.toLowerCase().includes('teamwork') ||
+            req.toLowerCase().includes('problem') ||
+            req.toLowerCase().includes('attention')
+          )
+        },
+        job_responsibilities: jobData.responsibilities || []
+      }
+
+      console.log('========== QUIZ GENERATION REQUEST (Job Creation) ==========')
+      console.log('API Endpoint:', 'http://127.0.0.1:8000/quiz')
+      console.log('Job ID:', jobId)
+      console.log('Job Data being sent:', JSON.stringify(apiJobData, null, 2))
+
+      // Create FormData for API request
+      const formData = new FormData()
+      const jobBlob = new Blob([JSON.stringify(apiJobData)], {
+        type: 'application/json'
+      })
+      formData.append('job_json', jobBlob, 'job.json')
+
+      // Use number of questions from quiz config
+      const numQuestions = jobData.quiz_config.num_questions || 15
+      formData.append('questions', numQuestions.toString())
+
+      console.log('Number of questions requested:', numQuestions)
+      console.log('Quiz configuration:', jobData.quiz_config)
+
+      // Call quiz generation API
+      console.log('Calling quiz generation API...')
+      const response = await fetch('http://127.0.0.1:8000/quiz', {
+        method: 'POST',
+        body: formData
+      })
+
+      console.log('API Response status:', response.status)
+      console.log('API Response ok:', response.ok)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('API Error Response:', errorText)
+        throw new Error(`API responded with status: ${response.status}`)
+      }
+
+      const quizData = await response.json()
+
+      console.log('========== QUIZ GENERATION RESPONSE ==========')
+      console.log('Quiz ID:', quizData.quiz_id)
+      console.log('Metadata:', quizData.metadata)
+      console.log('Number of questions received:', quizData.questions?.length || 0)
+      console.log('Full Quiz Data:', JSON.stringify(quizData, null, 2))
+      console.log('==============================================')
+
+      // Store the generated quiz in the database
+      const { error: updateError } = await supabase
+        .from('jobs')
+        .update({
+          custom_fields: {
+            ...jobData.custom_fields,
+            generated_quiz: {
+              quiz_id: quizData.quiz_id,
+              metadata: quizData.metadata,
+              questions: quizData.questions,
+              generated_at: new Date().toISOString()
+            }
+          }
+        })
+        .eq('id', jobId)
+
+      if (updateError) throw updateError
+
+      console.log('Quiz generated successfully:', quizData.quiz_id)
+      return quizData
+    } catch (error) {
+      console.error('Error generating quiz:', error)
+      // Don't throw - we don't want quiz generation failure to fail job creation
+      toast.error('Quiz generation failed. You can regenerate it later.')
     }
   }
 
@@ -290,40 +505,148 @@ export default function CreateJobPage() {
     try {
       setIsSubmitting(true)
       const { data: { user } } = await supabase.auth.getUser()
-      
+
       if (!user) {
         toast.error('You must be logged in to create a job')
         return
       }
 
-      // Get company_id from profiles table using user id
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('company_id')
+      // Check if company record exists
+      const { data: company, error: companyCheckError } = await supabase
+        .from('companies')
+        .select('id')
         .eq('id', user.id)
         .single()
 
-      if (!profile?.company_id) {
-        toast.error('Company profile not found')
-        return
-      }
-
-      const { error } = await supabase
-        .from('jobs')
-        .insert({
-          ...formData,
-          company_id: profile.company_id,
-          status: 'published',
-          step: steps.length
+      if (companyCheckError || !company) {
+        console.error('Company record check error:', {
+          error: companyCheckError,
+          code: companyCheckError?.code,
+          message: companyCheckError?.message,
+          details: companyCheckError?.details,
+          userId: user.id,
+          companyExists: !!company
         })
 
-      if (error) throw error
+        // If no company record exists (PGRST116 = no rows), create one automatically
+        if (companyCheckError?.code === 'PGRST116') {
+          console.log('No company record found. Creating one automatically...')
+          const { error: createError } = await supabase
+            .from('companies')
+            .insert({
+              id: user.id,
+              company_name: 'My Company', // Default name, user can update in profile
+              location: null,
+              industry: null,
+              size: null,
+              website: null,
+              description: null
+            })
 
-      toast.success('Job posted successfully')
+          if (createError) {
+            console.error('Failed to create company record:', {
+              error: createError,
+              message: createError.message,
+              details: createError.details,
+              code: createError.code
+            })
+            toast.error(`Failed to create company profile: ${createError.message}`)
+            return
+          }
+
+          toast.success('Company profile created! Continuing with job posting...')
+          // Continue with job creation - no return
+        } else {
+          toast.error('Error checking company profile. Please try again.')
+          return
+        }
+      }
+
+      // Map form data to database schema
+      const jobData = {
+        company_id: user.id,
+        title: formData.title,
+        description: formData.description,
+        location: formData.location,
+        type: formData.type,
+        requirements: formData.requirements,
+        benefits: formData.benefits,
+        salary_min: formData.salary_min,
+        salary_max: formData.salary_max,
+        currency: formData.currency,
+        status: 'active', // Change to 'active' so it shows in candidate jobs
+        step: steps.length,
+        // Store all additional config in custom_fields JSONB column
+        custom_fields: {
+          department: formData.department,
+          is_remote: formData.is_remote,
+          has_relocation: formData.has_relocation,
+          overview: formData.overview,
+          responsibilities: formData.responsibilities,
+          detailed_requirements: formData.detailed_requirements,
+          detailed_benefits: formData.detailed_benefits,
+          required_documents: formData.required_documents,
+          required_skills: formData.required_skills,
+          min_education: formData.min_education,
+          ai_screening_enabled: formData.ai_screening_enabled,
+          test_requirements: formData.test_requirements,
+          quiz_config: formData.technical_test_config, // Quiz configuration
+          ai_test_generation: formData.ai_test_generation,
+          automated_scheduling: formData.automated_scheduling,
+          ai_feedback: formData.ai_feedback,
+          stage_weightages: formData.stage_weightages,
+          interview_config: formData.interview_config
+        },
+        // Store interview stages and config
+        stages: {
+          interview_stages: formData.interview_stages,
+          ai_interview_config: formData.ai_interview_config
+        }
+      }
+
+      const { data: insertedJob, error } = await supabase
+        .from('jobs')
+        .insert(jobData)
+        .select()
+        .single()
+
+      if (error) {
+        console.error('Supabase error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
+        throw new Error(error.message || 'Failed to post job')
+      }
+
+      toast.success('Job posted successfully!')
+
+      // Generate quiz in the background if AI test generation is enabled
+      if (formData.ai_test_generation && insertedJob) {
+        toast.info('Generating quiz questions...', { duration: 3000 })
+
+        // Pass the complete form data for quiz generation
+        await generateQuizForJob(insertedJob.id, {
+          title: formData.title,
+          description: formData.description,
+          overview: formData.overview,
+          requirements: formData.requirements,
+          responsibilities: formData.responsibilities,
+          detailed_requirements: formData.detailed_requirements,
+          quiz_config: formData.technical_test_config,
+          custom_fields: jobData.custom_fields
+        })
+      }
+
       router.push('/company/jobs')
-    } catch (error) {
-      console.error('Error posting job:', error)
-      toast.error('Failed to post job')
+    } catch (error: any) {
+      console.error('Error posting job:', {
+        message: error.message,
+        stack: error.stack,
+        error: error
+      })
+      toast.error(error.message || 'Failed to post job')
     } finally {
       setIsSubmitting(false)
     }
@@ -331,7 +654,7 @@ export default function CreateJobPage() {
 
   const prevStep = () => {
     if (currentStep > 0) {
-      setCurrentStep((currentStep - 1) as 0 | 1 | 2 | 3 | 4)
+      setCurrentStep((currentStep - 1) as 0 | 1 | 2 | 3)
     }
   }
 
@@ -352,13 +675,12 @@ export default function CreateJobPage() {
           {steps.map((step, index) => (
             <div key={step.id} className="flex flex-col items-center">
               <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                  index < currentStep
-                    ? "bg-violet-600 text-white"
-                    : index === currentStep
-                      ? "bg-violet-100 text-violet-700 border-2 border-violet-600"
-                      : "bg-slate-100 text-slate-400"
-                }`}
+                className={`w-10 h-10 rounded-full flex items-center justify-center ${index < currentStep
+                  ? "bg-violet-600 text-white"
+                  : index === currentStep
+                    ? "bg-violet-100 text-violet-700 border-2 border-violet-600"
+                    : "bg-slate-100 text-slate-400"
+                  }`}
               >
                 {index < currentStep ? (
                   <svg
@@ -407,8 +729,8 @@ export default function CreateJobPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="title">Job Title</Label>
-                  <Input 
-                    id="title" 
+                  <Input
+                    id="title"
                     placeholder="e.g. Senior Software Engineer"
                     value={formData.title}
                     onChange={(e) => handleInputChange('title', e.target.value)}
@@ -416,7 +738,7 @@ export default function CreateJobPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="department">Department</Label>
-                  <Select 
+                  <Select
                     value={formData.department}
                     onValueChange={(value) => handleInputChange('department', value)}
                   >
@@ -498,7 +820,18 @@ export default function CreateJobPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="benefits">Benefits & Perks</Label>
+                <Label htmlFor="responsibilities">Responsibilities</Label>
+                <Textarea
+                  id="responsibilities"
+                  placeholder="List the key responsibilities for this role..."
+                  className="min-h-[150px]"
+                  value={formData.responsibilities.join('\n')}
+                  onChange={(e) => handleInputChange('responsibilities', e.target.value.split('\n').filter(Boolean))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="benefits">Benefits &amp; Perks</Label>
                 <Textarea
                   id="benefits"
                   placeholder="Describe the benefits and perks of working at your company..."
@@ -511,14 +844,14 @@ export default function CreateJobPage() {
               <div className="space-y-2">
                 <Label>Salary Range (PKR)</Label>
                 <div className="grid gap-4 md:grid-cols-2">
-                  <Input 
-                    placeholder="Minimum salary" 
+                  <Input
+                    placeholder="Minimum salary"
                     type="number"
                     value={formData.salary_min || ''}
                     onChange={(e) => handleInputChange('salary_min', e.target.value ? Number(e.target.value) : null)}
                   />
-                  <Input 
-                    placeholder="Maximum salary" 
+                  <Input
+                    placeholder="Maximum salary"
                     type="number"
                     value={formData.salary_max || ''}
                     onChange={(e) => handleInputChange('salary_max', e.target.value ? Number(e.target.value) : null)}
@@ -530,28 +863,20 @@ export default function CreateJobPage() {
                 <Label>Additional Options</Label>
                 <div className="space-y-2">
                   <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="remote" 
+                    <Checkbox
+                      id="remote"
                       checked={formData.is_remote}
                       onCheckedChange={(checked) => handleInputChange('is_remote', checked)}
                     />
                     <Label htmlFor="remote">Remote work allowed</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Checkbox 
+                    <Checkbox
                       id="relocation"
                       checked={formData.has_relocation}
                       onCheckedChange={(checked) => handleInputChange('has_relocation', checked)}
                     />
                     <Label htmlFor="relocation">Relocation assistance available</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="sponsorship"
-                      checked={formData.has_sponsorship}
-                      onCheckedChange={(checked) => handleInputChange('has_sponsorship', checked)}
-                    />
-                    <Label htmlFor="sponsorship">Visa sponsorship available</Label>
                   </div>
                 </div>
               </div>
@@ -560,78 +885,19 @@ export default function CreateJobPage() {
               <Button variant="outline" onClick={prevStep} disabled={isFirstStep(currentStep)}>
                 Previous
               </Button>
-              <Button onClick={nextStep} disabled={isSubmitting}>
-                {isSubmitting ? 'Saving...' : 'Next Step'}
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="secondary" onClick={saveDraft} disabled={isSubmitting}>
+                  {isSubmitting ? 'Saving...' : 'Save as Draft'}
+                </Button>
+                <Button onClick={nextStep} disabled={isSubmitting}>
+                  {isSubmitting ? 'Saving...' : 'Next Step'}
+                </Button>
+              </div>
             </CardFooter>
           </>
         )}
 
         {currentStep === 1 && (
-          <>
-            <CardHeader>
-              <CardTitle>Job Description</CardTitle>
-              <CardDescription>
-                Provide detailed information about the job responsibilities and requirements.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="overview">Job Overview</Label>
-                <Textarea
-                  id="overview"
-                  placeholder="Provide a brief overview of the role and your company..."
-                  className="min-h-[100px]"
-                  value={formData.overview}
-                  onChange={(e) => handleInputChange('overview', e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="responsibilities">Responsibilities</Label>
-                <Textarea
-                  id="responsibilities"
-                  placeholder="List the key responsibilities for this role..."
-                  className="min-h-[150px]"
-                  value={formData.responsibilities.join('\n')}
-                  onChange={(e) => handleInputChange('responsibilities', e.target.value.split('\n').filter(Boolean))}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="detailed-requirements">Detailed Requirements</Label>
-                <Textarea
-                  id="detailed-requirements"
-                  placeholder="List the skills, qualifications, and experience required..."
-                  className="min-h-[150px]"
-                  value={formData.detailed_requirements.join('\n')}
-                  onChange={(e) => handleInputChange('detailed_requirements', e.target.value.split('\n').filter(Boolean))}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="detailed-benefits">Detailed Benefits & Perks</Label>
-                <Textarea
-                  id="detailed-benefits"
-                  placeholder="Describe the benefits and perks offered with this position..."
-                  className="min-h-[100px]"
-                  value={formData.detailed_benefits.join('\n')}
-                  onChange={(e) => handleInputChange('detailed_benefits', e.target.value.split('\n').filter(Boolean))}
-                />
-              </div>
-            </CardContent>
-            <CardFooter className="flex justify-between">
-              <Button variant="outline" onClick={prevStep} disabled={isFirstStep(currentStep)}>
-                Previous
-              </Button>
-              <Button onClick={nextStep} disabled={isSubmitting}>
-                {isSubmitting ? 'Saving...' : 'Next Step'}
-              </Button>
-            </CardFooter>
-          </>
-        )}
-
-        {currentStep === 2 && (
           <>
             <CardHeader>
               <CardTitle>Resume Requirements</CardTitle>
@@ -640,70 +906,17 @@ export default function CreateJobPage() {
             <CardContent className="space-y-6">
               <div className="space-y-4">
                 <Label>Required Documents</Label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-start space-x-2">
-                    <Checkbox 
-                      id="resume" 
-                      checked={formData.required_documents.resume}
-                      onCheckedChange={(checked) => handleInputChange('required_documents', {
-                        ...formData.required_documents,
-                        resume: checked as boolean
-                      })}
-                    />
-                    <div className="grid gap-1.5 leading-none">
-                      <Label htmlFor="resume" className="cursor-pointer">
-                        Resume/CV
-                      </Label>
-                      <p className="text-sm text-slate-500">Standard resume with work history</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start space-x-2">
-                    <Checkbox 
-                      id="cover-letter"
-                      checked={formData.required_documents.cover_letter}
-                      onCheckedChange={(checked) => handleInputChange('required_documents', {
-                        ...formData.required_documents,
-                        cover_letter: checked as boolean
-                      })}
-                    />
-                    <div className="grid gap-1.5 leading-none">
-                      <Label htmlFor="cover-letter" className="cursor-pointer">
-                        Cover Letter
-                      </Label>
-                      <p className="text-sm text-slate-500">Personalized letter explaining interest</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start space-x-2">
-                    <Checkbox 
-                      id="portfolio"
-                      checked={formData.required_documents.portfolio}
-                      onCheckedChange={(checked) => handleInputChange('required_documents', {
-                        ...formData.required_documents,
-                        portfolio: checked as boolean
-                      })}
-                    />
-                    <div className="grid gap-1.5 leading-none">
-                      <Label htmlFor="portfolio" className="cursor-pointer">
-                        Portfolio
-                      </Label>
-                      <p className="text-sm text-slate-500">Link to work samples or portfolio</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start space-x-2">
-                    <Checkbox 
-                      id="references"
-                      checked={formData.required_documents.references}
-                      onCheckedChange={(checked) => handleInputChange('required_documents', {
-                        ...formData.required_documents,
-                        references: checked as boolean
-                      })}
-                    />
-                    <div className="grid gap-1.5 leading-none">
-                      <Label htmlFor="references" className="cursor-pointer">
-                        References
-                      </Label>
-                      <p className="text-sm text-slate-500">Professional references</p>
-                    </div>
+                <div className="flex items-start space-x-2">
+                  <Checkbox
+                    id="resume"
+                    checked={true}
+                    disabled={true}
+                  />
+                  <div className="grid gap-1.5 leading-none">
+                    <Label htmlFor="resume" className="cursor-pointer">
+                      Resume/CV <span className="text-xs text-muted-foreground">(Required)</span>
+                    </Label>
+                    <p className="text-sm text-slate-500">Standard resume with work history</p>
                   </div>
                 </div>
               </div>
@@ -715,8 +928,8 @@ export default function CreateJobPage() {
                     <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor={`skill-${index}`}>Skill {index + 1}</Label>
-                        <Input 
-                          id={`skill-${index}`} 
+                        <Input
+                          id={`skill-${index}`}
                           placeholder="e.g. React.js"
                           value={skill.name}
                           onChange={(e) => {
@@ -751,8 +964,8 @@ export default function CreateJobPage() {
                     </div>
                   ))}
 
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="w-full"
                     onClick={() => handleInputChange('required_skills', [
                       ...formData.required_skills,
@@ -787,14 +1000,14 @@ export default function CreateJobPage() {
               <div className="space-y-2">
                 <Label htmlFor="ai-screening">AI Resume Screening</Label>
                 <div className="flex items-start space-x-2">
-                  <Checkbox 
-                    id="ai-screening" 
-                    checked={formData.ai_screening_enabled}
-                    onCheckedChange={(checked) => handleInputChange('ai_screening_enabled', checked)}
+                  <Checkbox
+                    id="ai-screening"
+                    checked={true}
+                    disabled={true}
                   />
                   <div className="grid gap-1.5 leading-none">
                     <Label htmlFor="ai-screening" className="cursor-pointer">
-                      Enable AI Resume Screening
+                      AI Resume Screening <span className="text-xs text-muted-foreground">(Always Enabled)</span>
                     </Label>
                     <p className="text-sm text-slate-500">
                       Our AI will analyze resumes and rank candidates based on your requirements
@@ -807,481 +1020,296 @@ export default function CreateJobPage() {
               <Button variant="outline" onClick={prevStep} disabled={isFirstStep(currentStep)}>
                 Previous
               </Button>
-              <Button onClick={nextStep} disabled={isSubmitting}>
-                {isSubmitting ? 'Saving...' : 'Next Step'}
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="secondary" onClick={saveDraft} disabled={isSubmitting}>
+                  {isSubmitting ? 'Saving...' : 'Save as Draft'}
+                </Button>
+                <Button onClick={nextStep} disabled={isSubmitting}>
+                  {isSubmitting ? 'Saving...' : 'Next Step'}
+                </Button>
+              </div>
             </CardFooter>
           </>
-        )}
+        )
+        }
 
-        {currentStep === 3 && (
-          <>
-            <CardHeader>
-              <CardTitle>Test Requirements</CardTitle>
-              <CardDescription>Set up skills assessments and tests for candidates.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <Label>Stage Weightages</Label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="resume-weightage">Resume Screening Weightage (%)</Label>
-                    <Input 
-                      id="resume-weightage"
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={formData.stage_weightages.resume_screening}
-                      onChange={(e) => handleInputChange('stage_weightages', {
-                        ...formData.stage_weightages,
-                        resume_screening: Number(e.target.value)
-                      })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="technical-weightage">Technical Quiz Weightage (%)</Label>
-                    <Input 
-                      id="technical-weightage"
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={formData.stage_weightages.technical_quiz}
-                      onChange={(e) => handleInputChange('stage_weightages', {
-                        ...formData.stage_weightages,
-                        technical_quiz: Number(e.target.value)
-                      })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="coding-weightage">Coding Test Weightage (%)</Label>
-                    <Input 
-                      id="coding-weightage"
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={formData.stage_weightages.coding_test}
-                      onChange={(e) => handleInputChange('stage_weightages', {
-                        ...formData.stage_weightages,
-                        coding_test: Number(e.target.value)
-                      })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="interview-weightage">Interview Weightage (%)</Label>
-                    <Input 
-                      id="interview-weightage"
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={formData.stage_weightages.interview}
-                      onChange={(e) => handleInputChange('stage_weightages', {
-                        ...formData.stage_weightages,
-                        interview: Number(e.target.value)
-                      })}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <Label>Technical Quiz Configuration</Label>
-                <div className="border rounded-md p-4 space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="test-difficulty">Difficulty Level</Label>
-                    <Select
-                      value={formData.technical_test_config.difficulty}
-                      onValueChange={(value) => handleInputChange('technical_test_config', {
-                        ...formData.technical_test_config,
-                        difficulty: value
-                      })}
-                    >
-                      <SelectTrigger id="test-difficulty">
-                        <SelectValue placeholder="Select difficulty" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="easy">Entry Level (0-2 years)</SelectItem>
-                        <SelectItem value="medium">Mid Level (2-5 years)</SelectItem>
-                        <SelectItem value="hard">Senior Level (5+ years)</SelectItem>
-                        <SelectItem value="expert">Lead/Architect Level</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="test-duration">Test Duration</Label>
-                    <Select
-                      value={formData.technical_test_config.duration}
-                      onValueChange={(value) => handleInputChange('technical_test_config', {
-                        ...formData.technical_test_config,
-                        duration: value
-                      })}
-                    >
-                      <SelectTrigger id="test-duration">
-                        <SelectValue placeholder="Select duration" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="30">30 minutes</SelectItem>
-                        <SelectItem value="45">45 minutes</SelectItem>
-                        <SelectItem value="60">1 hour</SelectItem>
-                        <SelectItem value="90">1.5 hours</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Test Topics</Label>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      {[
-                        'javascript', 'react', 'nodejs', 'typescript', 
-                        'python', 'django', 'flask', 'sql',
-                        'aws', 'docker', 'kubernetes', 'ci-cd',
-                        'system-design', 'algorithms', 'data-structures'
-                      ].map((topic) => (
-                        <div key={topic} className="flex items-center space-x-2">
-                          <Checkbox 
-                            id={`topic-${topic}`}
-                            checked={formData.technical_test_config.topics.includes(topic)}
-                            onCheckedChange={(checked) => {
-                              const newTopics = checked
-                                ? [...formData.technical_test_config.topics, topic]
-                                : formData.technical_test_config.topics.filter(t => t !== topic)
-                              handleInputChange('technical_test_config', {
-                                ...formData.technical_test_config,
-                                topics: newTopics
-                              })
-                            }}
-                          />
-                          <Label htmlFor={`topic-${topic}`} className="cursor-pointer">
-                            {topic.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="technical-passing-score">Passing Score (%)</Label>
-                    <Input 
-                      id="technical-passing-score"
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={formData.technical_test_config.passing_score}
-                      onChange={(e) => handleInputChange('technical_test_config', {
-                        ...formData.technical_test_config,
-                        passing_score: Number(e.target.value)
-                      })}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <Label>Coding Test Configuration</Label>
-                <div className="border rounded-md p-4 space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="coding-difficulty">Difficulty Level</Label>
-                    <Select
-                      value={formData.coding_test_config.difficulty}
-                      onValueChange={(value) => handleInputChange('coding_test_config', {
-                        ...formData.coding_test_config,
-                        difficulty: value
-                      })}
-                    >
-                      <SelectTrigger id="coding-difficulty">
-                        <SelectValue placeholder="Select difficulty" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="easy">Entry Level (0-2 years)</SelectItem>
-                        <SelectItem value="medium">Mid Level (2-5 years)</SelectItem>
-                        <SelectItem value="hard">Senior Level (5+ years)</SelectItem>
-                        <SelectItem value="expert">Lead/Architect Level</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="coding-duration">Test Duration</Label>
-                    <Select
-                      value={formData.coding_test_config.duration}
-                      onValueChange={(value) => handleInputChange('coding_test_config', {
-                        ...formData.coding_test_config,
-                        duration: value
-                      })}
-                    >
-                      <SelectTrigger id="coding-duration">
-                        <SelectValue placeholder="Select duration" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="60">1 hour</SelectItem>
-                        <SelectItem value="90">1.5 hours</SelectItem>
-                        <SelectItem value="120">2 hours</SelectItem>
-                        <SelectItem value="180">3 hours</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Programming Languages</Label>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      {[
-                        'javascript', 'typescript', 'python', 'java',
-                        'csharp', 'php', 'ruby', 'go'
-                      ].map((lang) => (
-                        <div key={lang} className="flex items-center space-x-2">
-                          <Checkbox 
-                            id={`lang-${lang}`}
-                            checked={formData.coding_test_config.languages.includes(lang)}
-                            onCheckedChange={(checked) => {
-                              const newLangs = checked
-                                ? [...formData.coding_test_config.languages, lang]
-                                : formData.coding_test_config.languages.filter(l => l !== lang)
-                              handleInputChange('coding_test_config', {
-                                ...formData.coding_test_config,
-                                languages: newLangs
-                              })
-                            }}
-                          />
-                          <Label htmlFor={`lang-${lang}`} className="cursor-pointer">
-                            {lang.charAt(0).toUpperCase() + lang.slice(1)}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="coding-passing-score">Passing Score (%)</Label>
-                    <Input 
-                      id="coding-passing-score"
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={formData.coding_test_config.passing_score}
-                      onChange={(e) => handleInputChange('coding_test_config', {
-                        ...formData.coding_test_config,
-                        passing_score: Number(e.target.value)
-                      })}
-                    />
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter className="flex justify-between">
-              <Button variant="outline" onClick={prevStep} disabled={isFirstStep(currentStep)}>
-                Previous
-              </Button>
-              <Button onClick={nextStep} disabled={isSubmitting}>
-                {isSubmitting ? 'Saving...' : 'Next Step'}
-              </Button>
-            </CardFooter>
-          </>
-        )}
-
-        {currentStep === 4 && (
-          <>
-            <CardHeader>
-              <CardTitle>Interview Settings</CardTitle>
-              <CardDescription>Configure the interview process for this job position.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label>Interview Stages</Label>
+        {
+          currentStep === 2 && (
+            <>
+              <CardHeader>
+                <CardTitle>Test Requirements</CardTitle>
+                <CardDescription>Set up skills assessments and tests for candidates.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
                 <div className="space-y-4">
-                  <div className="flex items-start space-x-2">
-                    <Checkbox 
-                      id="ai-screening-interview" 
-                      checked={formData.interview_stages.ai_screening}
-                      onCheckedChange={(checked) => handleInputChange('interview_stages', {
-                        ...formData.interview_stages,
-                        ai_screening: checked as boolean
-                      })}
-                    />
-                    <div className="grid gap-1.5 leading-none">
-                      <Label htmlFor="ai-screening-interview" className="cursor-pointer">
-                        AI Screening Interview
-                      </Label>
-                      <p className="text-sm text-slate-500">
-                        Initial automated interview to assess basic qualifications
-                      </p>
+                  <div className="flex items-center justify-between">
+                    <Label>Stage Weightages</Label>
+                    <div className={`text-sm font-medium ${getTotalWeightage() === 100 ? 'text-green-600' : getTotalWeightage() > 100 ? 'text-red-600' : 'text-orange-600'}`}>
+                      Total: {getTotalWeightage()}%
+                      {getTotalWeightage() !== 100 && (
+                        <span className="ml-2 text-xs">
+                          {getTotalWeightage() > 100 ? '(exceeds 100%)' : '(must equal 100%)'}
+                        </span>
+                      )}
                     </div>
                   </div>
-
-                  <div className="flex items-start space-x-2">
-                    <Checkbox 
-                      id="technical-interview"
-                      checked={formData.interview_stages.technical}
-                      onCheckedChange={(checked) => handleInputChange('interview_stages', {
-                        ...formData.interview_stages,
-                        technical: checked as boolean
-                      })}
-                    />
-                    <div className="grid gap-1.5 leading-none">
-                      <Label htmlFor="technical-interview" className="cursor-pointer">
-                        Technical Interview
-                      </Label>
-                      <p className="text-sm text-slate-500">In-depth assessment of technical skills</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="resume-weightage">Resume Screening Weightage (%)</Label>
+                      <Input
+                        id="resume-weightage"
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={formData.stage_weightages.resume_screening}
+                        onChange={(e) => handleInputChange('stage_weightages', {
+                          ...formData.stage_weightages,
+                          resume_screening: Number(e.target.value)
+                        })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="quiz-weightage">Quiz Assessment Weightage (%)</Label>
+                      <Input
+                        id="quiz-weightage"
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={formData.stage_weightages.quiz}
+                        onChange={(e) => handleInputChange('stage_weightages', {
+                          ...formData.stage_weightages,
+                          quiz: Number(e.target.value)
+                        })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="interview-weightage">Interview Weightage (%)</Label>
+                      <Input
+                        id="interview-weightage"
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={formData.stage_weightages.interview}
+                        onChange={(e) => handleInputChange('stage_weightages', {
+                          ...formData.stage_weightages,
+                          interview: Number(e.target.value)
+                        })}
+                      />
                     </div>
                   </div>
-
-                  <div className="flex items-start space-x-2">
-                    <Checkbox 
-                      id="behavioral-interview"
-                      checked={formData.interview_stages.behavioral}
-                      onCheckedChange={(checked) => handleInputChange('interview_stages', {
-                        ...formData.interview_stages,
-                        behavioral: checked as boolean
-                      })}
-                    />
-                    <div className="grid gap-1.5 leading-none">
-                      <Label htmlFor="behavioral-interview" className="cursor-pointer">
-                        Behavioral Interview
-                      </Label>
-                      <p className="text-sm text-slate-500">Assess soft skills and cultural fit</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start space-x-2">
-                    <Checkbox 
-                      id="final-interview"
-                      checked={formData.interview_stages.final}
-                      onCheckedChange={(checked) => handleInputChange('interview_stages', {
-                        ...formData.interview_stages,
-                        final: checked as boolean
-                      })}
-                    />
-                    <div className="grid gap-1.5 leading-none">
-                      <Label htmlFor="final-interview" className="cursor-pointer">
-                        Final Interview with Leadership
-                      </Label>
-                      <p className="text-sm text-slate-500">Final round with senior team members</p>
-                    </div>
-                  </div>
+                  {!isWeightageValid() && (
+                    <p className="text-sm text-red-600 mt-2">
+                      ⚠️ The total weightage must equal exactly 100%. Please adjust the values.
+                    </p>
+                  )}
                 </div>
-              </div>
 
-              {formData.interview_stages.ai_screening && (
                 <div className="space-y-4">
-                  <Label>AI Screening Interview Configuration</Label>
+                  <Label>Quiz Configuration</Label>
+                  <p className="text-sm text-muted-foreground">Configure the quiz assessment for this position. Quiz questions will be automatically generated based on the job requirements using AI.</p>
                   <div className="border rounded-md p-4 space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="interview-format">Interview Format</Label>
-                      <RadioGroup 
-                        value={formData.ai_interview_config.format}
-                        onValueChange={(value) => handleInputChange('ai_interview_config', {
-                          ...formData.ai_interview_config,
-                          format: value as 'video' | 'audio' | 'text'
-                        })}
-                        className="flex flex-col gap-2"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="video" id="video" />
-                          <Label htmlFor="video" className="cursor-pointer">
-                            Video Interview
-                          </Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="audio" id="audio" />
-                          <Label htmlFor="audio" className="cursor-pointer">
-                            Audio Interview
-                          </Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="text" id="text" />
-                          <Label htmlFor="text" className="cursor-pointer">
-                            Text-based Interview
-                          </Label>
-                        </div>
-                      </RadioGroup>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="interview-duration">Interview Duration</Label>
+                      <Label htmlFor="test-difficulty">Difficulty Level</Label>
                       <Select
-                        value={formData.ai_interview_config.duration}
-                        onValueChange={(value) => handleInputChange('ai_interview_config', {
-                          ...formData.ai_interview_config,
-                          duration: value
+                        value={formData.technical_test_config.difficulty}
+                        onValueChange={(value) => handleInputChange('technical_test_config', {
+                          ...formData.technical_test_config,
+                          difficulty: value
                         })}
                       >
-                        <SelectTrigger id="interview-duration">
-                          <SelectValue placeholder="Select duration" />
+                        <SelectTrigger id="test-difficulty">
+                          <SelectValue placeholder="Select difficulty" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="15">15 minutes</SelectItem>
-                          <SelectItem value="30">30 minutes</SelectItem>
-                          <SelectItem value="45">45 minutes</SelectItem>
-                          <SelectItem value="60">1 hour</SelectItem>
+                          <SelectItem value="easy">Entry Level (0-2 years)</SelectItem>
+                          <SelectItem value="medium">Mid Level (2-5 years)</SelectItem>
+                          <SelectItem value="hard">Senior Level (5+ years)</SelectItem>
+                          <SelectItem value="expert">Lead/Architect Level</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="interview-questions">Custom Interview Questions</Label>
-                      <Textarea
-                        id="interview-questions"
-                        placeholder="Add any specific questions you'd like to include in the AI interview..."
-                        className="min-h-[100px]"
-                        value={formData.ai_interview_config.custom_questions}
-                        onChange={(e) => handleInputChange('ai_interview_config', {
-                          ...formData.ai_interview_config,
-                          custom_questions: e.target.value
+                      <Label htmlFor="test-duration">Test Duration</Label>
+                      <Select
+                        value={formData.technical_test_config.duration}
+                        onValueChange={(value) => handleInputChange('technical_test_config', {
+                          ...formData.technical_test_config,
+                          duration: value
+                        })}
+                      >
+                        <SelectTrigger id="test-duration">
+                          <SelectValue placeholder="Select duration" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="30">30 minutes</SelectItem>
+                          <SelectItem value="45">45 minutes</SelectItem>
+                          <SelectItem value="60">1 hour</SelectItem>
+                          <SelectItem value="90">1.5 hours</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="num-questions">Number of Questions</Label>
+                      <Input
+                        id="num-questions"
+                        type="number"
+                        min="5"
+                        max="50"
+                        value={formData.technical_test_config.num_questions}
+                        onChange={(e) => handleInputChange('technical_test_config', {
+                          ...formData.technical_test_config,
+                          num_questions: Number(e.target.value)
+                        })}
+                      />
+                      <p className="text-xs text-muted-foreground">Number of questions to generate for the quiz (5-50)</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Test Topics</Label>
+                      <p className="text-xs text-muted-foreground mb-2">Add topics for the quiz questions (e.g., JavaScript, React, SQL)</p>
+                      <div className="border rounded-md p-4 space-y-3">
+                        {formData.technical_test_config.topics.map((topic, index) => (
+                          <div key={index} className="flex items-center gap-2">
+                            <Input
+                              value={topic}
+                              placeholder="e.g. React.js"
+                              onChange={(e) => {
+                                const newTopics = [...formData.technical_test_config.topics]
+                                newTopics[index] = e.target.value
+                                handleInputChange('technical_test_config', {
+                                  ...formData.technical_test_config,
+                                  topics: newTopics
+                                })
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const newTopics = formData.technical_test_config.topics.filter((_, i) => i !== index)
+                                handleInputChange('technical_test_config', {
+                                  ...formData.technical_test_config,
+                                  topics: newTopics
+                                })
+                              }}
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        ))}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => handleInputChange('technical_test_config', {
+                            ...formData.technical_test_config,
+                            topics: [...formData.technical_test_config.topics, '']
+                          })}
+                        >
+                          + Add Topic
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="technical-passing-score">Passing Score (%)</Label>
+                      <Input
+                        id="technical-passing-score"
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={formData.technical_test_config.passing_score}
+                        onChange={(e) => handleInputChange('technical_test_config', {
+                          ...formData.technical_test_config,
+                          passing_score: Number(e.target.value)
                         })}
                       />
                     </div>
                   </div>
                 </div>
-              )}
-
-              <div className="space-y-2">
-                <Label htmlFor="interview-scheduling">Interview Scheduling</Label>
-                <div className="flex items-start space-x-2">
-                  <Checkbox 
-                    id="interview-scheduling" 
-                    checked={formData.automated_scheduling}
-                    onCheckedChange={(checked) => handleInputChange('automated_scheduling', checked)}
-                  />
-                  <div className="grid gap-1.5 leading-none">
-                    <Label htmlFor="interview-scheduling" className="cursor-pointer">
-                      Enable Automated Scheduling
-                    </Label>
-                    <p className="text-sm text-slate-500">
-                      Allow candidates to book interview slots based on your team's availability
-                    </p>
-                  </div>
+              </CardContent>
+              <CardFooter className="flex justify-between">
+                <Button variant="outline" onClick={prevStep} disabled={isFirstStep(currentStep)}>
+                  Previous
+                </Button>
+                <div className="flex gap-2">
+                  <Button variant="secondary" onClick={saveDraft} disabled={isSubmitting}>
+                    {isSubmitting ? 'Saving...' : 'Save as Draft'}
+                  </Button>
+                  <Button onClick={nextStep} disabled={isSubmitting || !isWeightageValid()}>
+                    {isSubmitting ? 'Saving...' : 'Next Step'}
+                  </Button>
                 </div>
-              </div>
+              </CardFooter>
+            </>
+          )
+        }
 
-              <div className="space-y-2">
-                <Label htmlFor="interview-feedback">Interview Feedback</Label>
-                <div className="flex items-start space-x-2">
-                  <Checkbox 
-                    id="interview-feedback" 
-                    checked={formData.ai_feedback}
-                    onCheckedChange={(checked) => handleInputChange('ai_feedback', checked)}
-                  />
-                  <div className="grid gap-1.5 leading-none">
-                    <Label htmlFor="interview-feedback" className="cursor-pointer">
-                      Enable AI Interview Analysis
-                    </Label>
-                    <p className="text-sm text-slate-500">
-                      Our AI will analyze interview responses and provide objective feedback
-                    </p>
-                  </div>
+        {
+          currentStep === 3 && (
+            <>
+              <CardHeader>
+                <CardTitle>Interview Settings</CardTitle>
+                <CardDescription>Configure the interview process for this job position.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="interview-duration">Interview Duration</Label>
+                  <Select
+                    value={formData.ai_interview_config.duration}
+                    onValueChange={(value) => handleInputChange('ai_interview_config', {
+                      ...formData.ai_interview_config,
+                      duration: value
+                    })}
+                  >
+                    <SelectTrigger id="interview-duration">
+                      <SelectValue placeholder="Select duration" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="15">15 minutes</SelectItem>
+                      <SelectItem value="30">30 minutes</SelectItem>
+                      <SelectItem value="45">45 minutes</SelectItem>
+                      <SelectItem value="60">1 hour</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Duration of the AI screening interview</p>
                 </div>
-              </div>
-            </CardContent>
-            <CardFooter className="flex justify-between">
-              <Button variant="outline" onClick={prevStep} disabled={isFirstStep(currentStep)}>
-                Previous
-              </Button>
-              <Button onClick={nextStep} disabled={isSubmitting}>
-                {isSubmitting ? 'Saving...' : 'Create Job'}
-              </Button>
-            </CardFooter>
-          </>
-        )}
-      </Card>
-    </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="interview-questions">Custom Interview Questions</Label>
+                  <Textarea
+                    id="interview-questions"
+                    placeholder="Add any specific questions you'd like to include in the AI interview (one per line)..."
+                    className="min-h-[150px]"
+                    value={formData.ai_interview_config.custom_questions}
+                    onChange={(e) => handleInputChange('ai_interview_config', {
+                      ...formData.ai_interview_config,
+                      custom_questions: e.target.value
+                    })}
+                  />
+                  <p className="text-xs text-muted-foreground">These questions will be included in the AI screening interview</p>
+                </div>
+              </CardContent>
+              <CardFooter className="flex justify-between">
+                <Button variant="outline" onClick={prevStep} disabled={isFirstStep(currentStep)}>
+                  Previous
+                </Button>
+                <div className="flex gap-2">
+                  <Button variant="secondary" onClick={saveDraft} disabled={isSubmitting}>
+                    {isSubmitting ? 'Saving...' : 'Save as Draft'}
+                  </Button>
+                  <Button onClick={nextStep} disabled={isSubmitting}>
+                    {isSubmitting ? 'Saving...' : 'Create Job'}
+                  </Button>
+                </div>
+              </CardFooter>
+            </>
+          )
+        }
+      </Card >
+    </div >
   )
 }
