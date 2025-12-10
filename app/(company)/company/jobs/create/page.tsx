@@ -431,7 +431,8 @@ export default function CreateJobPage() {
       }
 
       console.log('========== QUIZ GENERATION REQUEST (Job Creation) ==========')
-      console.log('API Endpoint:', 'http://127.0.0.1:8000/quiz')
+      const API_BASE_URL = process.env.NEXT_PUBLIC_RESUME_API_URL || 'http://127.0.0.1:8000';
+      console.log('API Endpoint:', `${API_BASE_URL}/quiz`)
       console.log('Job ID:', jobId)
       console.log('Job Data being sent:', JSON.stringify(apiJobData, null, 2))
 
@@ -451,7 +452,7 @@ export default function CreateJobPage() {
 
       // Call quiz generation API
       console.log('Calling quiz generation API...')
-      const response = await fetch('http://127.0.0.1:8000/quiz', {
+      const response = await fetch(`${API_BASE_URL}/quiz`, {
         method: 'POST',
         body: formData
       })
