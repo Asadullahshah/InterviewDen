@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,8 +20,29 @@ import '@/utils/test-microphone';
 
 type InterviewState = 'not_started' | 'starting' | 'in_progress' | 'finished' | 'grading' | 'completed' | 'error';
 
+// Loading fallback for Suspense
+function InterviewLoading() {
+  return (
+    <Card>
+      <CardContent className="p-12 text-center">
+        <Loader2 className="h-16 w-16 animate-spin text-primary mx-auto mb-4" />
+        <h2 className="text-2xl font-bold mb-2">Loading Interview...</h2>
+        <p className="text-muted-foreground">Preparing your interview session</p>
+      </CardContent>
+    </Card>
+  );
+}
 
+// Main export with Suspense wrapper
 export default function InterviewPage() {
+  return (
+    <Suspense fallback={<InterviewLoading />}>
+      <InterviewPageContent />
+    </Suspense>
+  );
+}
+
+function InterviewPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const jobId = searchParams?.get('jobId');

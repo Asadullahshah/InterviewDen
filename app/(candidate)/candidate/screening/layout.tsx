@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useScreening } from "@/app/context/screening-context";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { CheckCircle2, Circle } from "lucide-react";
+import { CheckCircle2, Circle, Loader2 } from "lucide-react";
 
 type ScreeningStep = "resume" | "quiz" | "interview";
 
@@ -15,7 +15,27 @@ const steps: { id: ScreeningStep; label: string }[] = [
   { id: "interview", label: "AI Interview" },
 ];
 
+function ScreeningLoading() {
+  return (
+    <div className="flex items-center justify-center h-32">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  );
+}
+
 export default function ScreeningLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <Suspense fallback={<ScreeningLoading />}>
+      <ScreeningLayoutContent>{children}</ScreeningLayoutContent>
+    </Suspense>
+  );
+}
+
+function ScreeningLayoutContent({
   children,
 }: {
   children: React.ReactNode;
@@ -24,11 +44,11 @@ export default function ScreeningLayout({
   const jobId = searchParams?.get("jobId");
   const { getProgress } = useScreening();
   const [mounted, setMounted] = useState(false);
-  
+
   useEffect(() => {
     setMounted(true);
   }, []);
-  
+
   if (!jobId) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -67,30 +87,28 @@ export default function ScreeningLayout({
             <span className="text-sm font-medium">{Math.round(progressPercentage)}%</span>
           </div>
           <Progress value={progressPercentage} className="h-2" />
-          
+
           <div className="grid grid-cols-3 gap-4">
             {steps.map((step, index) => {
               const isCompleted = progress?.progress[step.id]?.completed;
               const isCurrent = index === currentStepIndex;
               const isPast = index < currentStepIndex;
-              
+
               return (
                 <div key={step.id} className="flex flex-col items-center gap-2">
-                  <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
-                    isCompleted ? "bg-green-100 text-green-600" :
-                    isCurrent ? "bg-primary text-primary-foreground" :
-                    isPast ? "bg-muted text-muted-foreground" :
-                    "bg-muted text-muted-foreground"
-                  }`}>
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full ${isCompleted ? "bg-green-100 text-green-600" :
+                      isCurrent ? "bg-primary text-primary-foreground" :
+                        isPast ? "bg-muted text-muted-foreground" :
+                          "bg-muted text-muted-foreground"
+                    }`}>
                     {isCompleted ? (
                       <CheckCircle2 className="h-5 w-5" />
                     ) : (
                       <Circle className="h-5 w-5" />
                     )}
                   </div>
-                  <span className={`text-sm text-center ${
-                    isCurrent ? "font-medium" : "text-muted-foreground"
-                  }`}>
+                  <span className={`text-sm text-center ${isCurrent ? "font-medium" : "text-muted-foreground"
+                    }`}>
                     {step.label}
                   </span>
                 </div>

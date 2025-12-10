@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Search, MapPin, Briefcase, Clock, Building2, CheckCircle2, AlertCircle, PlayCircle, DollarSign, GraduationCap, FileText } from "lucide-react";
 import { Label } from "@/components/ui/label";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useScreening, ScreeningProgress } from "@/app/context/screening-context";
 import { Progress } from "@/components/ui/progress";
 import { createSupabaseBrowserClient } from "@/lib/supabase";
@@ -50,7 +50,6 @@ const experienceLevels = [
 
 export default function JobsPage() {
   const supabase = createSupabaseBrowserClient();
-  const searchParams = useSearchParams();
   const router = useRouter();
   const { getProgress, updateProgress } = useScreening();
   const [searchTerm, setSearchTerm] = useState("");
